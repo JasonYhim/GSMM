@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>지하안전 관리시스템 v18.0</title>
+<title>지하안전 관리시스템 v19.0</title>
 <script src="https://www.gstatic.com/firebasejs/9.10.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.10.0/firebase-database-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -11,127 +11,247 @@
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
 :root{
   --bg:#0b101b;--sur:#111827;--s2:#1f2937;--bor:#374151;
-  --acc:#00c6ff;--red:#ef4444;--yel:#f59e0b;--txt:#f1f5f9;
-  --gen:#a855f7;--pri:#3b82f6;--urg:#ef4444;--tab:50px;
+  --acc:#00c6ff;--red:#ef4444;--yel:#f59e0b;--grn:#22c55e;--txt:#f1f5f9;
+  --gen:#a855f7;--pri:#3b82f6;--urg:#ef4444;--tab:52px;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html{height:100%;}
 body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--txt);
      height:calc(var(--vh,1vh)*100);display:flex;flex-direction:column;overflow:hidden;}
-.btn{border:none;border-radius:6px;padding:7px 13px;font-weight:700;cursor:pointer;font-size:12px;white-space:nowrap;transition:.15s;}
+
+/* ── 공통 버튼 ── */
+.btn{border:none;border-radius:7px;font-weight:700;cursor:pointer;
+     transition:.15s;white-space:nowrap;display:inline-flex;align-items:center;gap:5px;}
 .btn:active{opacity:.7;}
 .ba{background:var(--acc);color:#000;}
 .bw{background:var(--yel);color:#000;}
 .bs{background:var(--s2);color:var(--txt);border:1px solid var(--bor);}
 .br{background:var(--red);color:#fff;}
-header{flex-shrink:0;padding:8px 12px;background:var(--sur);border-bottom:1px solid var(--bor);display:flex;flex-wrap:wrap;align-items:center;gap:7px;z-index:300;}
+.bg{background:var(--grn);color:#fff;}
+/* 헤더 버튼 크기 */
+.hbtn{font-size:13px;padding:8px 14px;}
+/* 저장 버튼 상태 */
+.save-idle{background:var(--s2);color:#6b7280;border:1px solid var(--bor);cursor:default;}
+.save-dirty{background:var(--yel);color:#000;animation:pulse .8s infinite;}
+.save-ok{background:var(--grn);color:#fff;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.65}}
+
+/* ── 헤더 ── */
+header{flex-shrink:0;padding:8px 12px;background:var(--sur);
+       border-bottom:1px solid var(--bor);
+       display:flex;flex-wrap:wrap;align-items:center;gap:8px;z-index:300;}
 header h1{font-size:13px;white-space:nowrap;flex-shrink:0;}
-.hbg{display:flex;gap:6px;margin-left:auto;flex-shrink:0;}
-.sw{flex:1;min-width:180px;display:flex;align-items:center;gap:5px;background:var(--s2);border:1px solid var(--bor);border-radius:6px;padding:4px 8px;order:10;flex-basis:100%;}
-.sw input{background:none;border:none;outline:none;color:var(--txt);font-size:12px;width:100%;min-width:0;}
+.hbg{display:flex;gap:7px;margin-left:auto;flex-shrink:0;align-items:center;}
+
+/* 검색창 */
+.sw{flex:1;min-width:0;display:flex;align-items:center;gap:6px;
+    background:var(--s2);border:1px solid var(--bor);
+    border-radius:7px;padding:6px 10px;order:10;flex-basis:100%;}
+.sw input{background:none;border:none;outline:none;color:var(--txt);
+          font-size:13px;width:100%;min-width:0;}
 .sw input::placeholder{color:#6b7280;}
-.sbtn{background:var(--acc);border:none;border-radius:4px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;color:#000;}
-.scl{background:none;border:none;color:#9ca3af;cursor:pointer;font-size:16px;padding:0 3px;}
+.sbtn{background:var(--acc);border:none;border-radius:5px;
+      padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer;color:#000;}
+.scl{background:none;border:none;color:#9ca3af;cursor:pointer;
+     font-size:17px;padding:0 4px;line-height:1;}
 .scl:hover{color:var(--red);}
-#sRes{position:fixed;top:88px;left:50%;transform:translateX(-50%);width:min(400px,94vw);max-height:50vh;overflow-y:auto;background:var(--sur);border:1px solid var(--acc);border-radius:8px;z-index:600;display:none;box-shadow:0 8px 24px rgba(0,0,0,.75);}
+
+/* PAT 입력 모달 */
+#patModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);
+          z-index:900;align-items:center;justify-content:center;}
+#patModal.show{display:flex;}
+.modal-box{background:var(--sur);border:1px solid var(--acc);border-radius:12px;
+           padding:24px;width:min(400px,92vw);font-size:13px;}
+.modal-box h2{font-size:15px;margin-bottom:12px;color:var(--acc);}
+.modal-box p{color:#9ca3af;font-size:11px;line-height:1.6;margin-bottom:14px;}
+.modal-input{width:100%;background:var(--s2);border:1px solid var(--bor);
+             border-radius:6px;padding:8px 10px;color:var(--txt);font-size:13px;outline:none;margin-bottom:12px;}
+.modal-input:focus{border-color:var(--acc);}
+.modal-btns{display:flex;gap:8px;justify-content:flex-end;}
+
+/* 검색결과 */
+#sRes{position:fixed;top:88px;left:50%;transform:translateX(-50%);
+      width:min(420px,94vw);max-height:50vh;overflow-y:auto;
+      background:var(--sur);border:1px solid var(--acc);
+      border-radius:8px;z-index:600;display:none;
+      box-shadow:0 8px 24px rgba(0,0,0,.75);}
 .sri{padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--bor);font-size:12px;}
 .sri:hover,.sri:active{background:var(--s2);}
 .sri .sn{font-weight:600;color:var(--acc);}
 .sri .sa{color:#9ca3af;font-size:10px;margin-top:2px;}
 .sr0{padding:14px;text-align:center;color:#6b7280;font-size:12px;}
+
+/* ── 본문 ── */
 .bw2{display:flex;flex:1;overflow:hidden;min-height:0;}
-.side{width:260px;flex-shrink:0;border-right:1px solid var(--bor);display:flex;flex-direction:column;background:var(--sur);overflow:hidden;}
+
+/* 사이드바 (데스크탑) */
+.side{width:265px;flex-shrink:0;border-right:1px solid var(--bor);
+      display:flex;flex-direction:column;background:var(--sur);overflow:hidden;}
 .ss{flex:1;overflow-y:auto;padding:0 0 10px;}
-.dz{margin:10px;padding:13px;border:2px dashed var(--bor);border-radius:8px;text-align:center;cursor:pointer;font-size:11px;transition:.2s;line-height:1.8;}
+.dz{margin:10px;padding:13px;border:2px dashed var(--bor);border-radius:8px;
+    text-align:center;cursor:pointer;font-size:11px;transition:.2s;line-height:1.8;}
 .dz:hover,.dz.over{border-color:var(--acc);background:rgba(0,198,255,.05);}
 .sec{margin:0 10px 8px;border-top:1px solid var(--bor);padding-top:8px;}
-.sl{font-size:10px;color:#6b7280;margin-bottom:5px;font-weight:500;}
+.sl{font-size:10px;color:#6b7280;margin-bottom:5px;font-weight:600;letter-spacing:.3px;}
 #flist{padding:0 6px;}
-.fi{background:var(--s2);margin-bottom:4px;padding:8px 10px;border-radius:6px;display:flex;align-items:center;font-size:11px;gap:6px;border:1px solid transparent;}
+.fi{background:var(--s2);margin-bottom:4px;padding:8px 10px;border-radius:6px;
+    display:flex;align-items:center;font-size:11px;gap:6px;
+    border:1px solid transparent;}
 .fi.act{border-color:var(--acc);}
 .fn{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;}
 .fn:hover{color:var(--acc);}
+
+/* 지도 */
 #map{flex:1;position:relative;min-width:0;min-height:0;}
-#cbadge{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:rgba(239,68,68,.92);color:#fff;padding:6px 16px;border-radius:20px;font-size:12px;font-weight:700;z-index:200;display:none;pointer-events:none;}
-#gbadge{position:absolute;top:10px;right:10px;background:rgba(17,24,39,.92);border:1px solid var(--acc);border-radius:20px;padding:5px 12px;font-size:11px;color:var(--acc);display:none;z-index:200;}
+#cbadge{position:absolute;top:10px;left:50%;transform:translateX(-50%);
+        background:rgba(239,68,68,.92);color:#fff;padding:6px 16px;
+        border-radius:20px;font-size:12px;font-weight:700;
+        z-index:200;display:none;pointer-events:none;}
+#gbadge{position:absolute;top:10px;right:10px;background:rgba(17,24,39,.92);
+        border:1px solid var(--acc);border-radius:20px;padding:5px 12px;
+        font-size:11px;color:var(--acc);display:none;z-index:200;}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
 #gbadge{animation:blink 1.2s infinite;}
-#leg{position:absolute;bottom:24px;right:10px;background:rgba(10,15,26,.88);border:1px solid var(--bor);border-radius:8px;padding:9px 12px;z-index:200;font-size:11px;backdrop-filter:blur(6px);}
+#leg{position:absolute;bottom:24px;right:10px;background:rgba(10,15,26,.88);
+     border:1px solid var(--bor);border-radius:8px;padding:9px 12px;
+     z-index:200;font-size:11px;backdrop-filter:blur(6px);}
 .lt{color:var(--acc);font-weight:700;margin-bottom:7px;font-size:11px;}
 .lr{display:flex;align-items:center;gap:7px;margin-bottom:4px;}
 .ld{width:15px;height:15px;border-radius:50%;border:2px solid rgba(255,255,255,.7);flex-shrink:0;}
 .ld.gen{background:var(--gen);}.ld.pri{background:var(--pri);}.ld.urg{background:var(--urg);}
+
+/* 마커 */
 .mw{position:relative;}
-.mc{width:24px;height:24px;border-radius:50%;border:2.5px solid rgba(255,255,255,.85);color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.5);transition:transform .15s;}
+.mc{width:24px;height:24px;border-radius:50%;border:2.5px solid rgba(255,255,255,.85);
+    color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;
+    justify-content:center;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.5);transition:transform .15s;}
 .mc:hover,.mc:active{transform:scale(1.3);}
 .mc.gen{background:var(--gen);}.mc.pri{background:var(--pri);}.mc.urg{background:var(--urg);}
-.mt{position:absolute;bottom:32px;left:50%;transform:translateX(-50%);background:rgba(8,14,26,.97);color:#fff;padding:8px 11px;border-radius:8px;font-size:11px;min-width:185px;display:none;border:1.5px solid var(--acc);z-index:1000;pointer-events:none;white-space:nowrap;}
-.mt::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:var(--acc);}
-.bp{height:255px;flex-shrink:0;background:var(--sur);border-top:2px solid var(--bor);overflow:auto;}
+.mt{position:absolute;bottom:32px;left:50%;transform:translateX(-50%);
+    background:rgba(8,14,26,.97);color:#fff;padding:8px 11px;border-radius:8px;
+    font-size:11px;min-width:185px;display:none;border:1.5px solid var(--acc);
+    z-index:1000;pointer-events:none;white-space:nowrap;}
+.mt::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);
+           border:6px solid transparent;border-top-color:var(--acc);}
+
+/* 데스크탑 하단 테이블 */
+.bp{height:255px;flex-shrink:0;background:var(--sur);
+    border-top:2px solid var(--bor);overflow:auto;}
 table{width:100%;border-collapse:collapse;font-size:11px;min-width:2100px;table-layout:fixed;}
-th{position:sticky;top:0;background:#141e30;padding:8px 7px;text-align:left;border-bottom:1px solid var(--bor);color:var(--acc);z-index:10;}
+th{position:sticky;top:0;background:#141e30;padding:8px 7px;text-align:left;
+   border-bottom:1px solid var(--bor);color:var(--acc);z-index:10;}
 td{padding:3px 7px;border-bottom:1px solid #1a2840;vertical-align:middle;}
 tr:hover td{background:rgba(0,198,255,.04);}
 tr.hl td{background:rgba(0,198,255,.1)!important;}
-.ce{background:none;border:1px solid transparent;color:#fff;width:100%;font-size:11px;outline:none;padding:4px;border-radius:3px;}
+tr.changed td{background:rgba(245,158,11,.06)!important;}
+
+/* 셀 입력 */
+.ce{background:none;border:1px solid transparent;color:#fff;
+    width:100%;font-size:11px;outline:none;padding:4px;border-radius:3px;}
 .ce:focus{border-color:var(--acc);background:rgba(0,198,255,.08);}
+/* 편집 잠금 상태 */
+.ce:disabled{background:rgba(255,255,255,.03);color:#6b7280;cursor:default;border-color:transparent;}
 .qa{color:#facc15!important;}.qf{color:#ef4444!important;}.qw{color:#9ca3af!important;}
-/* 모바일 */
+
+/* ══════ 모바일 ══════ */
 @media(max-width:767px){
   .side{display:none!important;}
   .bp{display:none;}
-  #mTab{display:flex;height:var(--tab);flex-shrink:0;background:var(--sur);border-top:1px solid var(--bor);}
-  .tb{flex:1;background:none;border:none;color:#6b7280;font-size:10px;font-weight:500;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-top:2px solid transparent;transition:.15s;padding:0;}
+  #mTab{display:flex;height:var(--tab);flex-shrink:0;
+        background:var(--sur);border-top:1px solid var(--bor);}
+  .tb{flex:1;background:none;border:none;color:#6b7280;font-size:10px;font-weight:500;
+      cursor:pointer;display:flex;flex-direction:column;align-items:center;
+      justify-content:center;gap:2px;border-top:2px solid transparent;transition:.15s;padding:0;}
   .tb.on{color:var(--acc);border-top-color:var(--acc);}
-  .tb svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+  .tb svg{width:19px;height:19px;stroke:currentColor;fill:none;
+          stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
   #tMap{flex:1;display:flex;flex-direction:column;min-height:0;}
   #tFile{display:none;flex:1;overflow-y:auto;padding:10px;background:var(--sur);}
-  #tData{display:none;flex:1;overflow:auto;background:var(--sur);}
-  #tData .bp{display:block;height:100%;border:none;}
+  #tData{display:none;flex:1;overflow:hidden;background:var(--sur);flex-direction:column;}
+  /* 데이터탭 툴바 */
+  #dataToolbar{flex-shrink:0;padding:8px 10px;background:var(--s2);
+               border-bottom:1px solid var(--bor);display:flex;gap:7px;align-items:center;}
+  #tData .bp{display:flex;flex-direction:column;height:100%;border:none;overflow:auto;}
   #tData table{min-width:1500px;font-size:10px;}
   #tData th,#tData td{padding:4px 5px;}
   #tData .ce{font-size:10px;padding:3px;}
-  .mfc{background:var(--s2);border-radius:8px;padding:10px 12px;margin-bottom:8px;border:1px solid transparent;}
+  .mfc{background:var(--s2);border-radius:8px;padding:10px 12px;
+       margin-bottom:8px;border:1px solid transparent;}
   .mfc.act{border-color:var(--acc);}
   .mfc-name{font-size:12px;font-weight:600;margin-bottom:4px;}
   .mfc-meta{font-size:10px;color:#9ca3af;display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;}
   .mfc-btns{display:flex;gap:6px;}
-  .mfc-btns .btn{flex:1;font-size:11px;padding:5px 8px;}
+  .mfc-btns .btn{flex:1;font-size:11px;padding:6px 8px;}
   .mur{display:flex;gap:6px;margin-bottom:10px;}
-  .mur .btn{flex:1;font-size:11px;padding:9px 6px;}
-  .msl{font-size:11px;color:#6b7280;font-weight:600;margin:8px 0 5px;padding-bottom:4px;border-bottom:1px solid var(--bor);}
-  #sRes{top:88px;}
+  .mur .btn{flex:1;font-size:12px;padding:10px 6px;}
+  .msl{font-size:11px;color:#6b7280;font-weight:600;margin:10px 0 5px;
+       padding-bottom:4px;border-bottom:1px solid var(--bor);}
+  #sRes{top:94px;}
+  /* 헤더 버튼 모바일 크기 */
+  .hbtn{font-size:11px;padding:7px 10px;}
 }
 @media(min-width:768px){
   #mTab{display:none;}
   #tFile{display:none!important;}
   #tData{display:none!important;}
   #tMap{display:contents;}
+  #dataToolbar{display:none;}
 }
 </style>
 </head>
 <body>
-<header id="hdr">
-  <h1>🗺 지하안전 관리 <span style="font-weight:300;opacity:.5">v18</span></h1>
-  <div class="hbg">
-    <button class="btn bw" id="cbtn" onclick="toggleClick()">📍</button>
-    <button class="btn bs" onclick="saveToFB()">☁</button>
-    <button class="btn ba" onclick="exportXlsx()">📊</button>
+
+<!-- PAT 입력 모달 -->
+<div id="patModal">
+  <div class="modal-box">
+    <h2>🔑 GitHub 저장 권한 설정</h2>
+    <p>GitHub에 데이터를 직접 저장하려면 Personal Access Token(PAT)이 필요합니다.<br>
+    <b>설정 방법:</b> GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens<br>
+    권한: <b>Contents → Read and write</b> (GSMM repository만 선택)</p>
+    <input class="modal-input" type="password" id="patInput" placeholder="github_pat_...">
+    <div style="font-size:10px;color:#6b7280;margin-bottom:12px;">
+      ※ 토큰은 이 기기의 브라우저에만 저장되며 외부로 전송되지 않습니다.
+    </div>
+    <div class="modal-btns">
+      <button class="btn bs" style="padding:8px 16px;font-size:12px;" onclick="closePatModal()">취소</button>
+      <button class="btn ba" style="padding:8px 16px;font-size:12px;" onclick="savePat()">저장 및 적용</button>
+    </div>
   </div>
+</div>
+
+<!-- 헤더 -->
+<header id="hdr">
+  <h1>🗺 지하안전 관리 <span style="font-weight:300;opacity:.5">v19</span></h1>
+  <div class="hbg">
+    <!-- 클릭 추가 토글 -->
+    <button class="btn bw hbtn" id="cbtn" onclick="toggleClick()">📍 클릭추가 OFF</button>
+    <!-- GitHub 저장 (변경 없으면 비활성) -->
+    <button class="btn hbtn save-idle" id="savBtn" onclick="saveToGitHub()" disabled>
+      💾 저장
+    </button>
+    <!-- 다운로드 -->
+    <button class="btn ba hbtn" onclick="exportXlsx()">📊 다운로드</button>
+  </div>
+  <!-- 검색창 (2번째 줄) -->
   <div class="sw" id="sw">
-    <span style="color:#6b7280;font-size:13px">🔍</span>
-    <input id="sInp" type="text" placeholder="장소·지번·도로명 검색"
+    <span style="color:#6b7280;font-size:14px">🔍</span>
+    <input id="sInp" type="text" placeholder="장소·지번·도로명 주소 검색"
            onkeydown="if(event.key==='Enter')doSearch()"
            oninput="if(!this.value)clearSearch()">
     <button class="sbtn" onclick="doSearch()">검색</button>
     <button class="scl" onclick="clearSearch()">✕</button>
   </div>
 </header>
+
 <div id="sRes"></div>
+
+<!-- 본문 -->
 <div class="bw2">
+
   <!-- 사이드바 (데스크탑) -->
   <div class="side">
     <div class="ss">
+      <!-- 로컬 업로드 -->
       <div class="dz" id="dz" onclick="document.getElementById('fi').click()"
            ondragover="event.preventDefault();this.classList.add('over')"
            ondragleave="this.classList.remove('over')"
@@ -139,27 +259,47 @@ tr.hl td{background:rgba(0,198,255,.1)!important;}
         📁 엑셀 드래그 또는 클릭<br>
         <span style="color:#6b7280;font-size:10px">RawData 시트 · 6행부터</span>
       </div>
-      <input type="file" id="fi" style="display:none" accept=".xlsx" onchange="readExcel(this.files[0]);this.value=''">
-      <div class="sec"><div class="sl">📂 불러온 파일</div><div id="flist"></div></div>
+      <input type="file" id="fi" style="display:none" accept=".xlsx"
+             onchange="readExcel(this.files[0]);this.value=''">
+
+      <!-- 불러온 파일 목록 -->
       <div class="sec">
-        <div class="sl">🐙 GitHub 파일 (클릭하여 불러오기)</div>
-        <button onclick="loadGitHub()" class="btn bs" style="width:100%;font-size:11px;padding:6px;margin-bottom:5px;">🔄 GitHub 목록 새로고침</button>
-        <div id="ghList" style="font-size:11px;color:#9ca3af;text-align:center;padding:4px 0;">위 버튼으로 불러오세요</div>
+        <div class="sl">📂 불러온 파일</div>
+        <div id="flist"></div>
       </div>
+
+      <!-- GitHub 파일 목록 -->
       <div class="sec">
-        <div class="sl">☁ Firebase 저장 데이터</div>
-        <button onclick="loadFromFB()" class="btn bs" style="width:100%;font-size:11px;padding:6px;margin-bottom:5px;">🔄 FB 목록 새로고침</button>
-        <div id="fbList" style="font-size:11px;color:#9ca3af;text-align:center;padding:4px 0;">위 버튼으로 불러오세요</div>
+        <div class="sl">🐙 GitHub 파일</div>
+        <button onclick="loadGitHub()" class="btn bs"
+                style="width:100%;font-size:11px;padding:7px;margin-bottom:5px;">
+          🔄 목록 새로고침
+        </button>
+        <div id="ghList" style="font-size:11px;color:#9ca3af;text-align:center;padding:4px 0;">
+          위 버튼으로 불러오세요
+        </div>
+      </div>
+
+      <!-- PAT 설정 -->
+      <div class="sec">
+        <div class="sl">⚙ GitHub 저장 설정</div>
+        <button onclick="openPatModal()" class="btn bs"
+                style="width:100%;font-size:11px;padding:7px;">
+          🔑 저장 토큰 설정
+        </button>
+        <div id="patStatus" style="font-size:10px;color:#6b7280;text-align:center;margin-top:4px;"></div>
       </div>
     </div>
   </div>
-  <!-- 지도+탭 래퍼 -->
+
+  <!-- 지도 + 탭 콘텐츠 래퍼 -->
   <div style="flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;">
+
     <!-- 탭0: 지도 -->
     <div id="tMap">
       <div id="map">
         <div id="cbadge">📍 지도를 클릭하여 새 지점 추가</div>
-        <div id="gbadge">🔄 변환 중 <span id="gcnt">0</span>건</div>
+        <div id="gbadge">🔄 주소 변환 중 <span id="gcnt">0</span>건</div>
         <div id="leg">
           <div class="lt">범 례</div>
           <div class="lr"><div class="ld gen"></div><span>일반</span></div>
@@ -168,50 +308,84 @@ tr.hl td{background:rgba(0,198,255,.1)!important;}
         </div>
       </div>
     </div>
+
     <!-- 탭1: 파일 (모바일) -->
     <div id="tFile">
       <div class="mur">
-        <button class="btn bs" onclick="document.getElementById('fi2').click()">📁 로컬</button>
-        <button class="btn bs" onclick="loadGitHub()">🐙 GitHub</button>
-        <button class="btn bs" onclick="loadFromFB()">☁ FB</button>
+        <button class="btn bs" onclick="document.getElementById('fi2').click()">📁 로컬 업로드</button>
+        <button class="btn bs" onclick="loadGitHub()">🐙 GitHub 목록</button>
       </div>
-      <input type="file" id="fi2" style="display:none" accept=".xlsx" onchange="readExcel(this.files[0]);this.value=''">
+      <input type="file" id="fi2" style="display:none" accept=".xlsx"
+             onchange="readExcel(this.files[0]);this.value=''">
+
       <div class="msl">📂 불러온 파일</div>
       <div id="mFlist"></div>
+
       <div class="msl" style="margin-top:14px">🐙 GitHub 파일</div>
-      <div id="mGhList" style="font-size:11px;color:#9ca3af;text-align:center;padding:6px 0;">상단 GitHub 버튼을 눌러주세요</div>
-      <div class="msl" style="margin-top:14px">☁ Firebase 저장 데이터</div>
-      <div id="mFbList" style="font-size:11px;color:#9ca3af;text-align:center;padding:6px 0;">상단 Firebase 버튼을 눌러주세요</div>
+      <div id="mGhList" style="font-size:11px;color:#9ca3af;text-align:center;padding:6px 0;">
+        상단 GitHub 목록 버튼을 눌러주세요
+      </div>
+
+      <!-- PAT 설정 (모바일) -->
+      <div class="msl" style="margin-top:14px">⚙ GitHub 저장 설정</div>
+      <button onclick="openPatModal()" class="btn bs"
+              style="width:100%;font-size:12px;padding:9px;margin-bottom:4px;">
+        🔑 저장 토큰 설정
+      </button>
+      <div id="mPatStatus" style="font-size:10px;color:#6b7280;text-align:center;"></div>
     </div>
+
     <!-- 탭2: 데이터 (모바일) -->
     <div id="tData">
+      <!-- 데이터 편집 툴바 -->
+      <div id="dataToolbar">
+        <button class="btn bs" id="editBtn" onclick="toggleEdit()"
+                style="font-size:12px;padding:7px 14px;">
+          🔒 편집 OFF
+        </button>
+        <button class="btn hbtn save-idle" id="mSavBtn" onclick="saveToGitHub()" disabled
+                style="font-size:12px;padding:7px 14px;">
+          💾 저장
+        </button>
+        <span id="editStatus" style="font-size:10px;color:#9ca3af;margin-left:4px;"></span>
+      </div>
       <div class="bp">
-        <table><thead><tr>
+        <table>
+          <thead><tr>
+            <th width="42">순번</th><th width="88">조사측선</th><th width="108">조사번호</th>
+            <th width="58">침하</th><th width="62">균열</th><th width="58">습윤</th>
+            <th width="52">노후도</th><th width="92">침하이력</th>
+            <th width="38">침하점</th><th width="38">균열점</th><th width="38">습윤점</th>
+            <th width="38">노후점</th><th width="38">보수</th><th width="38">평가점</th>
+            <th width="58">등급</th><th width="100">조사의견</th>
+            <th width="195">인접지번주소</th>
+            <th width="145">부가정보1</th><th width="165">부가정보2</th>
+          </tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 데스크탑 하단 테이블 -->
+    <div class="bp" id="deskBp">
+      <table>
+        <thead><tr>
           <th width="42">순번</th><th width="88">조사측선</th><th width="108">조사번호</th>
           <th width="58">침하</th><th width="62">균열</th><th width="58">습윤</th>
           <th width="52">노후도</th><th width="92">침하이력</th>
           <th width="38">침하점</th><th width="38">균열점</th><th width="38">습윤점</th>
           <th width="38">노후점</th><th width="38">보수</th><th width="38">평가점</th>
           <th width="58">등급</th><th width="100">조사의견</th>
-          <th width="195">인접지번주소</th><th width="145">부가정보1</th><th width="165">부가정보2</th>
-        </tr></thead><tbody id="tbody"></tbody></table>
-      </div>
+          <th width="195">인접지번주소 <span style="color:#6b7280;font-weight:400">(수정→마커)</span></th>
+          <th width="145">부가정보1</th><th width="165">부가정보2</th>
+        </tr></thead>
+        <tbody id="tbody2"></tbody>
+      </table>
     </div>
-    <!-- 데스크탑 하단 테이블 -->
-    <div class="bp" id="deskBp">
-      <table><thead><tr>
-        <th width="42">순번</th><th width="88">조사측선</th><th width="108">조사번호</th>
-        <th width="58">침하</th><th width="62">균열</th><th width="58">습윤</th>
-        <th width="52">노후도</th><th width="92">침하이력</th>
-        <th width="38">침하점</th><th width="38">균열점</th><th width="38">습윤점</th>
-        <th width="38">노후점</th><th width="38">보수</th><th width="38">평가점</th>
-        <th width="58">등급</th><th width="100">조사의견</th>
-        <th width="195">인접지번주소 <span style="color:#6b7280;font-weight:400">(수정→마커)</span></th>
-        <th width="145">부가정보1</th><th width="165">부가정보2</th>
-      </tr></thead><tbody id="tbody2"></tbody></table>
-    </div>
+
   </div>
-</div>
+</div><!-- /.bw2 -->
+
 <!-- 모바일 탭바 -->
 <div id="mTab">
   <button class="tb on" id="tb0" onclick="switchTab(0)">
@@ -227,14 +401,113 @@ tr.hl td{background:rgba(0,198,255,.1)!important;}
     <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>검색
   </button>
 </div>
+
 <script>
-/* 실제 뷰포트 높이 보정 (Samsung Internet / Safari 주소창 대응) */
+/* ── 뷰포트 높이 보정 ── */
 function setVh(){document.documentElement.style.setProperty('--vh',window.innerHeight*0.01+'px');}
 setVh();
 window.addEventListener('resize',setVh);
 window.addEventListener('orientationchange',()=>setTimeout(setVh,200));
 
-/* 모바일 탭 전환 */
+/* ── API 키 ── */
+const KAKAO_JS='b135a8fd766f2c9aaf310d58c2f5235e';
+const KAKAO_REST='8ff7bae76b607414d5d36bbbe679930c';
+const GH_OWNER='JasonYhim', GH_REPO='GSMM', GH_BRANCH='main';
+
+/* ── Firebase (내부 유지, 직접 노출 안 함) ── */
+const FB_CFG={apiKey:'AIzaSyARjCo49MamXAV-CmtB7F5SzQQ0XfYsJBk',authDomain:'ground-safety-maintenance-map.firebaseapp.com',databaseURL:'https://ground-safety-maintenance-map-default-rtdb.asia-southeast1.firebasedatabase.app',projectId:'ground-safety-maintenance-map',storageBucket:'ground-safety-maintenance-map.firebasestorage.app',messagingSenderId:'1070365424197',appId:'1:1070365424197:web:f4d4506163000b8338812c'};
+firebase.initializeApp(FB_CFG);
+
+/* ── 전역 상태 ── */
+let map, kakaoReady=false;
+const files={};
+let activeFileId=null;
+const markerMap=new Map();
+let srchOv=null,srchCi=null,clickMode=false;
+const geoQ=[];let geoRunning=false;
+
+/* 편집 모드 (데이터탭) */
+let editMode=false;
+
+/* 변경 추적 */
+let isDirty=false;           // 저장되지 않은 변경 있음
+let loadedFileName=null;     // 현재 GitHub에서 불러온 파일명
+let loadedFileSha=null;      // 현재 파일의 GitHub SHA (덮어쓰기용)
+
+/* ── PAT 관리 ── */
+function getPat(){return localStorage.getItem('gh_pat')||'';}
+function savePat(){
+  const v=document.getElementById('patInput').value.trim();
+  if(!v){alert('토큰을 입력하세요.');return;}
+  localStorage.setItem('gh_pat',v);
+  closePatModal();
+  updatePatStatus();
+  alert('✅ 토큰이 저장되었습니다.');
+}
+function openPatModal(){
+  document.getElementById('patInput').value=getPat();
+  document.getElementById('patModal').classList.add('show');
+}
+function closePatModal(){document.getElementById('patModal').classList.remove('show');}
+function updatePatStatus(){
+  const pat=getPat();
+  const msg=pat?'✅ 토큰 설정됨':'⚠ 토큰 미설정 (저장 불가)';
+  const col=pat?'var(--grn)':'#f59e0b';
+  ['patStatus','mPatStatus'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){el.textContent=msg;el.style.color=col;}
+  });
+}
+
+/* ── 저장 버튼 상태 관리 ── */
+function setDirty(v){
+  isDirty=v;
+  ['savBtn','mSavBtn'].forEach(id=>{
+    const btn=document.getElementById(id);
+    if(!btn) return;
+    btn.disabled=!v;
+    btn.className=btn.className.replace(/save-\w+/g,'').trim();
+    btn.classList.add(v?'save-dirty':'save-idle');
+    btn.textContent=v?'💾 저장 (미저장)':'💾 저장';
+  });
+}
+function setSaveOk(){
+  isDirty=false;
+  ['savBtn','mSavBtn'].forEach(id=>{
+    const btn=document.getElementById(id);
+    if(!btn) return;
+    btn.disabled=true;
+    btn.className=btn.className.replace(/save-\w+/g,'').trim();
+    btn.classList.add('save-ok');
+    btn.textContent='✅ 저장 완료';
+    setTimeout(()=>{
+      btn.className=btn.className.replace(/save-\w+/g,'').trim();
+      btn.classList.add('save-idle');
+      btn.textContent='💾 저장';
+    },3000);
+  });
+}
+
+/* ── 편집 모드 토글 (모바일 데이터탭) ── */
+function toggleEdit(){
+  editMode=!editMode;
+  const btn=document.getElementById('editBtn');
+  const status=document.getElementById('editStatus');
+  if(editMode){
+    btn.textContent='🔓 편집 ON';
+    btn.style.background='var(--yel)';btn.style.color='#000';
+    status.textContent='수정 후 저장 버튼을 눌러주세요';
+    status.style.color='var(--yel)';
+  } else {
+    btn.textContent='🔒 편집 OFF';
+    btn.style.background='';btn.style.color='';
+    status.textContent='';
+  }
+  // tbody(모바일) input disabled 토글
+  document.querySelectorAll('#tbody .ce').forEach(inp=>inp.disabled=!editMode);
+}
+
+/* ── 탭 전환 ── */
 let currentTab=0;
 function switchTab(n){
   if(window.innerWidth>=768) return;
@@ -242,40 +515,15 @@ function switchTab(n){
   document.querySelectorAll('.tb').forEach((b,i)=>b.classList.toggle('on',i===n));
   document.getElementById('tMap').style.display =(n===0)?'flex':'none';
   document.getElementById('tFile').style.display=(n===1)?'block':'none';
-  document.getElementById('tData').style.display=(n===2)?'block':'none';
-  if(n===0&&map){setTimeout(()=>map.relayout(),50);}
+  document.getElementById('tData').style.display=(n===2)?'flex':'none';
+  if(n===0&&map) setTimeout(()=>map.relayout(),60);
   if(n===3){
-    document.getElementById('tMap').style.display='none';
-    document.getElementById('tFile').style.display='none';
-    document.getElementById('tData').style.display='none';
+    ['tMap','tFile','tData'].forEach(id=>document.getElementById(id).style.display='none');
     setTimeout(()=>document.getElementById('sInp').focus(),80);
   }
 }
 
-/* API 키 */
-const KAKAO_JS='b135a8fd766f2c9aaf310d58c2f5235e';
-const KAKAO_REST='8ff7bae76b607414d5d36bbbe679930c';
-const GH_OWNER='JasonYhim',GH_REPO='GSMM',GH_BRANCH='main';
-const FB_CFG={
-  apiKey:'AIzaSyARjCo49MamXAV-CmtB7F5SzQQ0XfYsJBk',
-  authDomain:'ground-safety-maintenance-map.firebaseapp.com',
-  databaseURL:'https://ground-safety-maintenance-map-default-rtdb.asia-southeast1.firebasedatabase.app',
-  projectId:'ground-safety-maintenance-map',
-  storageBucket:'ground-safety-maintenance-map.firebasestorage.app',
-  messagingSenderId:'1070365424197',
-  appId:'1:1070365424197:web:f4d4506163000b8338812c'
-};
-firebase.initializeApp(FB_CFG);
-const db=firebase.database();
-
-/* 전역 상태 */
-let map,kakaoReady=false;
-const files={};let activeFileId=null;
-const markerMap=new Map();
-let srchOv=null,srchCi=null,clickMode=false;
-const geoQ=[];let geoRunning=false;
-
-/* 카카오 REST API 지오코딩 */
+/* ── 카카오 REST API ── */
 async function geocodeAddr(addr){
   if(!addr) return null;
   const H={'Authorization':'KakaoAK '+KAKAO_REST};
@@ -295,25 +543,24 @@ async function searchPlaces(q){
   return[];
 }
 
-/* 지오코딩 큐 */
+/* ── 지오코딩 큐 ── */
 async function runGeoQueue(){
   if(!kakaoReady||geoRunning||geoQ.length===0) return;
   geoRunning=true;
   while(geoQ.length>0){
-    const{fid,rowIdx}=geoQ.shift();
-    updateGBadge();
-    const f=files[fid];if(!f) continue;
+    const{fid,rowIdx}=geoQ.shift(); updateGBadge();
+    const f=files[fid]; if(!f) continue;
     const row=f.rows[rowIdx];
     const res=await geocodeAddr(row.addr);
     if(res){row.lat=res.lat;row.lng=res.lng;row.geoOk=true;updateQCell(fid,row._key,true);if(f.visible)placeMarker(fid,row._key,row);}
     else{row.geoOk=false;updateQCell(fid,row._key,false);}
     await new Promise(r=>setTimeout(r,300));
   }
-  geoRunning=false;updateGBadge();
+  geoRunning=false; updateGBadge();
 }
 function updateGBadge(){const n=geoQ.length;document.getElementById('gcnt').textContent=n;document.getElementById('gbadge').style.display=n>0?'block':'none';}
 
-/* 카카오 지도 초기화 */
+/* ── 카카오 지도 초기화 ── */
 (function(){
   const s=document.createElement('script');
   s.src='https://dapi.kakao.com/v2/maps/sdk.js?appkey='+KAKAO_JS+'&autoload=false';
@@ -321,6 +568,7 @@ function updateGBadge(){const n=geoQ.length;document.getElementById('gcnt').text
     map=new kakao.maps.Map(document.getElementById('map'),{center:new kakao.maps.LatLng(37.4979,127.0276),level:6});
     kakaoReady=true;
     if(window.innerWidth<768){document.getElementById('tb0').classList.add('on');document.getElementById('tMap').style.display='flex';setTimeout(()=>map.relayout(),150);}
+    updatePatStatus();
     runGeoQueue();
     kakao.maps.event.addListener(map,'click',async e=>{
       if(!clickMode) return;
@@ -332,24 +580,28 @@ function updateGBadge(){const n=geoQ.length;document.getElementById('gcnt').text
       const addr=prompt("추가할 지점의 주소:",def||'');
       if(addr===null) return;
       const row={seq:Date.now()%100000,road:'수동추가',code:'ADD',settle:'양호',crack:'양호',wet:'양호',age:'0',history:'-',sI:'',sJ:'',sK:'',sL:'',sM:'',sN:'',grade:'일반',opinion:'',addr:addr.trim(),infoS:'직접입력',infoT:'현장확인필요',lat,lng,geoOk:true,_key:'r'+Date.now()};
-      files[activeFileId].rows.push(row);renderAll();placeMarker(activeFileId,row._key,row);
+      files[activeFileId].rows.push(row);
+      setDirty(true);
+      renderAll();
+      placeMarker(activeFileId,row._key,row);
     });
   });
   document.head.appendChild(s);
 })();
 
-/* 클릭 추가 모드 */
+/* ── 클릭 추가 모드 ── */
 function toggleClick(){
   clickMode=!clickMode;
   const btn=document.getElementById('cbtn');
-  btn.textContent=clickMode?'📍 ON':'📍';
+  btn.textContent=clickMode?'📍 클릭추가 ON':'📍 클릭추가 OFF';
   btn.style.background=clickMode?'var(--red)':'var(--yel)';
+  btn.style.color=clickMode?'#fff':'#000';
   document.getElementById('cbadge').style.display=clickMode?'block':'none';
   if(map) map.setCursor(clickMode?'crosshair':'');
   if(clickMode&&window.innerWidth<768) switchTab(0);
 }
 
-/* 엑셀 읽기 */
+/* ── 엑셀 읽기 ── */
 function handleDrop(e){e.preventDefault();readExcel(e.dataTransfer.files[0]);}
 function readExcel(file){
   if(!file) return;
@@ -359,6 +611,7 @@ function readExcel(file){
     const sheet=wb.Sheets['RawData']||wb.Sheets[wb.SheetNames[0]];
     if(!sheet){alert("RawData 시트를 찾을 수 없습니다.");return;}
     processSheet(sheet,file.name);
+    loadedFileName=null; loadedFileSha=null; // 로컬 파일은 SHA 없음
   };
   reader.readAsArrayBuffer(file);
 }
@@ -367,46 +620,46 @@ function processSheet(sheet,name){
   const year=String(all[1]?.[0]||'2025'),corp=String(all[1]?.[1]||''),region=String(all[1]?.[2]||'');
   const rows=[];
   for(let i=5;i<all.length;i++){
-    const r=all[i];if(!r[0]&&r[0]!==0) continue;
+    const r=all[i]; if(!r[0]&&r[0]!==0) continue;
     rows.push({seq:r[0],road:String(r[1]||''),code:String(r[2]||''),settle:String(r[3]||''),crack:String(r[4]||''),wet:String(r[5]||''),age:String(r[6]||''),history:String(r[7]||''),sI:r[8]!==''?r[8]:'',sJ:r[9]!==''?r[9]:'',sK:r[10]!==''?r[10]:'',sL:r[11]!==''?r[11]:'',sM:r[12]!==''?r[12]:'',sN:r[13]!==''?r[13]:'',grade:String(r[14]||'일반'),opinion:String(r[15]||''),addr:String(r[16]||'').trim(),infoS:String(r[18]||''),infoT:String(r[19]||''),lat:null,lng:null,geoOk:false,_key:'r'+i});
   }
   const fid='F_'+Date.now();
   files[fid]={name,year,corp,region,rows,visible:true};
   activeFileId=fid;
+  setDirty(false);
   renderAll();
   rows.forEach((_,idx)=>geoQ.push({fid,rowIdx:idx}));
   updateGBadge();
   if(kakaoReady&&!geoRunning) runGeoQueue();
 }
 
-/* GitHub 파일 목록 */
+/* ── GitHub 파일 목록 ── */
 async function loadGitHub(){
-  const ghEl=document.getElementById('ghList'),mghEl=document.getElementById('mGhList');
+  const els=[document.getElementById('ghList'),document.getElementById('mGhList')];
   const setEl=(el,html)=>{if(el)el.innerHTML=html;};
-  setEl(ghEl,'<span style="color:var(--acc)">불러오는 중...</span>');
-  setEl(mghEl,'<span style="color:var(--acc)">불러오는 중...</span>');
+  els.forEach(el=>setEl(el,'<span style="color:var(--acc)">불러오는 중...</span>'));
   try{
     const resp=await fetch('https://api.github.com/repos/'+GH_OWNER+'/'+GH_REPO+'/contents/?ref='+GH_BRANCH,{headers:{'Accept':'application/vnd.github.v3+json'}});
     const list=await resp.json();
     const xlsxFiles=Array.isArray(list)?list.filter(f=>f.name.endsWith('.xlsx')||f.name.endsWith('.xls')):[];
-    if(xlsxFiles.length===0){setEl(ghEl,'<span style="color:#6b7280">xlsx 파일 없음</span>');setEl(mghEl,'<span style="color:#6b7280">xlsx 파일 없음</span>');return;}
+    if(xlsxFiles.length===0){els.forEach(el=>setEl(el,'<span style="color:#6b7280">xlsx 파일 없음</span>'));return;}
     const buildList=(container)=>{
       container.innerHTML='';
       xlsxFiles.forEach(file=>{
         const d=document.createElement('div');
-        d.style.cssText='display:flex;align-items:center;gap:6px;padding:7px 8px;background:var(--s2);border-radius:6px;margin-bottom:3px;cursor:pointer;border:1px solid transparent;font-size:11px;';
+        d.style.cssText='display:flex;align-items:center;gap:6px;padding:8px;background:var(--s2);border-radius:6px;margin-bottom:3px;cursor:pointer;border:1px solid transparent;font-size:11px;';
         d.innerHTML='<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📄 '+file.name+'</span><small style="color:#6b7280;flex-shrink:0">'+(file.size/1024).toFixed(0)+'KB</small>';
-        d.onmouseenter=()=>d.style.borderColor='var(--acc)';
-        d.onmouseleave=()=>d.style.borderColor='transparent';
-        d.onclick=()=>loadGitHubFile(file.download_url,file.name);
+        d.onmouseenter=()=>d.style.borderColor='var(--acc)';d.onmouseleave=()=>d.style.borderColor='transparent';
+        d.onclick=()=>loadGitHubFile(file.download_url,file.name,file.sha);
         container.appendChild(d);
       });
     };
-    if(ghEl) buildList(ghEl);
-    if(mghEl) buildList(mghEl);
-  }catch(e){const msg='<span style="color:var(--red)">오류: '+e.message+'</span>';setEl(ghEl,msg);setEl(mghEl,msg);}
+    els.forEach(el=>{if(el) buildList(el);});
+  }catch(e){els.forEach(el=>setEl(el,'<span style="color:var(--red)">오류: '+e.message+'</span>'));}
 }
-async function loadGitHubFile(url,name){
+
+/* GitHub 파일 불러오기 + SHA 저장 */
+async function loadGitHubFile(url,name,sha){
   try{
     const resp=await fetch(url);
     const buffer=await resp.arrayBuffer();
@@ -414,11 +667,55 @@ async function loadGitHubFile(url,name){
     const sheet=wb.Sheets['RawData']||wb.Sheets[wb.SheetNames[0]];
     if(!sheet){alert("RawData 시트를 찾을 수 없습니다.");return;}
     processSheet(sheet,name);
+    loadedFileName=name;   // GitHub 저장 시 사용
+    loadedFileSha=sha;     // 덮어쓰기용 SHA
     if(window.innerWidth<768) switchTab(0);
   }catch(e){alert('파일 불러오기 실패: '+e.message);}
 }
 
-/* 마커 관리 */
+/* ── GitHub에 직접 저장 ── */
+async function saveToGitHub(){
+  const pat=getPat();
+  if(!pat){openPatModal();return;}
+  if(!activeFileId||!files[activeFileId]){alert("저장할 파일을 선택하세요.");return;}
+  if(!loadedFileName){
+    // 로컬 업로드 파일은 새 파일로 저장
+    const name=prompt("GitHub에 저장할 파일명 (확장자 포함):",files[activeFileId].name||'data.xlsx');
+    if(!name) return;
+    loadedFileName=name;
+    loadedFileSha=null; // 새 파일
+  }
+
+  const f=files[activeFileId];
+  const cols=["순번","조사측선명","손상구분번호","침하(mm)","균열","습윤","노후도(년)","지반침하발생이력","침하점수","균열점수","습윤점수","노후도점수","보수보강이력","평가점수","평가등급","조사자의견","인접지번주소","조사위치도","부가정보1","부가정보2"];
+  const rows=f.rows.map(r=>[r.seq,r.road,r.code,r.settle,r.crack,r.wet,r.age,r.history,r.sI,r.sJ,r.sK,r.sL,r.sM,r.sN,r.grade,r.opinion,r.addr,'',r.infoS,r.infoT]);
+  const ws=XLSX.utils.aoa_to_sheet([["시행년도","시행사 구분","권역구 구분"],[f.year,f.corp,f.region],[],cols,...rows]);
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'RawData');
+  const b64=XLSX.write(wb,{type:'base64',bookType:'xlsx'});
+
+  const body={message:'📊 데이터 업데이트 - '+loadedFileName,content:b64};
+  if(loadedFileSha) body.sha=loadedFileSha; // 기존 파일 덮어쓰기
+
+  try{
+    ['savBtn','mSavBtn'].forEach(id=>{const b=document.getElementById(id);if(b){b.textContent='💾 저장 중...';b.disabled=true;}});
+    const resp=await fetch('https://api.github.com/repos/'+GH_OWNER+'/'+GH_REPO+'/contents/'+encodeURIComponent(loadedFileName),{
+      method:'PUT',
+      headers:{'Authorization':'token '+pat,'Accept':'application/vnd.github.v3+json','Content-Type':'application/json'},
+      body:JSON.stringify(body)
+    });
+    const result=await resp.json();
+    if(resp.ok){
+      loadedFileSha=result.content?.sha||loadedFileSha; // SHA 갱신
+      setSaveOk();
+      loadGitHub(); // 목록 갱신
+    } else {
+      alert('저장 실패: '+((result.message)||resp.status));
+      setDirty(true);
+    }
+  }catch(e){alert('저장 오류: '+e.message);setDirty(true);}
+}
+
+/* ── 마커 관리 ── */
 function placeMarker(fid,key,row){
   if(!map||!row.geoOk||row.lat===null) return;
   const mk=fid+':'+key;
@@ -429,23 +726,16 @@ function placeMarker(fid,key,row){
   const tip=document.createElement('div');tip.className='mt';
   tip.innerHTML='<b style="color:var(--acc)">'+(row.code||'-')+'</b><span style="color:#9ca3af;font-size:10px"> '+row.grade+'</span><br><span style="color:#d1d5db">'+(row.infoS||'')+'</span><br><small style="color:#6b7280">'+(row.addr||'주소없음')+'</small>';
   wrap.appendChild(dot);wrap.appendChild(tip);
-  dot.onmouseenter=()=>tip.style.display='block';
-  dot.onmouseleave=()=>tip.style.display='none';
+  dot.onmouseenter=()=>tip.style.display='block';dot.onmouseleave=()=>tip.style.display='none';
   dot.ontouchstart=e=>{e.stopPropagation();tip.style.display=tip.style.display==='block'?'none':'block';};
-  dot.onclick=()=>{
-    if(window.innerWidth<768) switchTab(2);
-    setTimeout(()=>{
-      const tr=document.getElementById('tr_'+CSS.escape(mk));
-      if(tr){tr.scrollIntoView({block:'center',behavior:'smooth'});tr.classList.add('hl');setTimeout(()=>tr.classList.remove('hl'),1500);}
-    },100);
-  };
+  dot.onclick=()=>{if(window.innerWidth<768) switchTab(2);setTimeout(()=>{const tr=document.getElementById('tr_'+CSS.escape(mk));if(tr){tr.scrollIntoView({block:'center',behavior:'smooth'});tr.classList.add('hl');setTimeout(()=>tr.classList.remove('hl'),1500);}},100);};
   const ov=new kakao.maps.CustomOverlay({position:new kakao.maps.LatLng(row.lat,row.lng),content:wrap,zIndex:gc==='urg'?3:gc==='pri'?2:1});
-  ov.setMap(map);markerMap.set(mk,ov);
+  ov.setMap(map); markerMap.set(mk,ov);
 }
 function setFileVisible(fid,visible){
   const f=files[fid];if(!f) return;
   f.visible=visible;
-  f.rows.forEach(row=>{const mk=fid+':'+row._key;if(markerMap.has(mk)) markerMap.get(mk).setMap(visible?map:null);});
+  f.rows.forEach(row=>{const mk=fid+':'+row._key;if(markerMap.has(mk))markerMap.get(mk).setMap(visible?map:null);});
 }
 function updateQCell(fid,key,ok){
   const mk=fid+':'+key;
@@ -459,11 +749,11 @@ function updateQCell(fid,key,ok){
 async function moveMarker(fid,key,row){
   if(!row.addr) return;
   const res=await geocodeAddr(row.addr);
-  if(res){row.lat=res.lat;row.lng=res.lng;row.geoOk=true;updateQCell(fid,key,true);placeMarker(fid,key,row);if(map) map.panTo(new kakao.maps.LatLng(row.lat,row.lng));}
+  if(res){row.lat=res.lat;row.lng=res.lng;row.geoOk=true;updateQCell(fid,key,true);placeMarker(fid,key,row);if(map)map.panTo(new kakao.maps.LatLng(row.lat,row.lng));}
   else{row.geoOk=false;updateQCell(fid,key,false);}
 }
 
-/* 검색 */
+/* ── 검색 ── */
 async function doSearch(){
   const q=document.getElementById('sInp').value.trim();if(!q) return;
   const rd=document.getElementById('sRes');rd.innerHTML='<div class="sr0">검색 중...</div>';rd.style.display='block';
@@ -486,8 +776,9 @@ function focusResult(lat,lng,name,addr){
 function clearSearch(){document.getElementById('sInp').value='';document.getElementById('sRes').style.display='none';if(srchOv){srchOv.setMap(null);srchOv=null;}if(srchCi){srchCi.setMap(null);srchCi=null;}}
 document.addEventListener('click',e=>{if(!document.getElementById('sw').contains(e.target)&&!document.getElementById('sRes').contains(e.target))document.getElementById('sRes').style.display='none';});
 
-/* UI 렌더링 */
-function renderAll(){renderSidebar();renderTable('tbody','tr_');renderTable('tbody2','tr2_');renderMobileFileList();}
+/* ── UI 렌더링 ── */
+function renderAll(){renderSidebar();renderTable('tbody','tr_',true);renderTable('tbody2','tr2_',false);renderMobileFileList();}
+
 function renderSidebar(){
   const fl=document.getElementById('flist');fl.innerHTML='';
   Object.entries(files).forEach(([fid,f])=>{
@@ -496,17 +787,20 @@ function renderSidebar(){
     fl.appendChild(d);
   });
 }
+
 function renderMobileFileList(){
   const ml=document.getElementById('mFlist');if(!ml) return;
   ml.innerHTML='';
   if(Object.keys(files).length===0){ml.innerHTML='<div style="font-size:11px;color:#6b7280;text-align:center;padding:8px">업로드된 파일 없음</div>';return;}
   Object.entries(files).forEach(([fid,f])=>{
     const d=document.createElement('div');d.className='mfc '+(activeFileId===fid?'act':'');
-    d.innerHTML='<div class="mfc-name">📄 '+f.name+'</div><div class="mfc-meta"><span>'+(f.year||'')+' '+(f.region||'')+'</span><span>총 '+f.rows.length+'건</span><span>위치확인 '+f.rows.filter(r=>r.geoOk).length+'건</span></div><div class="mfc-btns"><label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;flex:1;"><input type="checkbox" '+(f.visible?'checked':'')+' onchange="setFileVisible(\''+fid+'\',this.checked)"> 지도표시</label><button class="btn ba" onclick="activeFileId=\''+fid+'\';switchTab(2)" style="padding:5px 8px;font-size:11px;">데이터</button><button class="btn br" onclick="deleteFile(\''+fid+'\')" style="padding:5px 8px;font-size:11px;">삭제</button></div>';
+    d.innerHTML='<div class="mfc-name">📄 '+f.name+'</div><div class="mfc-meta"><span>'+(f.year||'')+' '+(f.region||'')+'</span><span>총 '+f.rows.length+'건</span><span>위치확인 '+f.rows.filter(r=>r.geoOk).length+'건</span></div><div class="mfc-btns"><label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;flex:1;"><input type="checkbox" '+(f.visible?'checked':'')+' onchange="setFileVisible(\''+fid+'\',this.checked)"> 지도표시</label><button class="btn ba" onclick="activeFileId=\''+fid+'\';switchTab(2)" style="padding:6px 8px;font-size:11px;">데이터</button><button class="btn br" onclick="deleteFile(\''+fid+'\')" style="padding:6px 8px;font-size:11px;">삭제</button></div>';
     ml.appendChild(d);
   });
 }
-function renderTable(tbodyId,rowPrefix){
+
+/* isMobile: tbody(모바일)는 editMode에 따라 disabled */
+function renderTable(tbodyId,rowPrefix,isMobile){
   const tbody=document.getElementById(tbodyId);if(!tbody) return;
   tbody.innerHTML='';
   const FIELDS=['seq','road','code','settle','crack','wet','age','history','sI','sJ','sK','sL','sM','sN','grade','opinion','addr','infoS','infoT'];
@@ -519,9 +813,16 @@ function renderTable(tbodyId,rowPrefix){
         const td=document.createElement('td');const inp=document.createElement('input');
         const isA=field==='addr';
         inp.className='ce'+(isA?' qw qInp':'');
-        if(isA){if(row.geoOk) inp.classList.replace('qw','qa');else if(row.lat!==null) inp.classList.replace('qw','qf');}
+        if(isA){if(row.geoOk)inp.classList.replace('qw','qa');else if(row.lat!==null)inp.classList.replace('qw','qf');}
         inp.value=row[field]!==null&&row[field]!==undefined?row[field]:'';
-        inp.onchange=ev=>{row[field]=ev.target.value;if(field==='addr') moveMarker(fid,row._key,row);};
+        // 모바일 탭은 편집 모드일 때만 수정 가능
+        if(isMobile) inp.disabled=!editMode;
+        inp.onchange=ev=>{
+          row[field]=ev.target.value;
+          tr.classList.add('changed');
+          setDirty(true);
+          if(field==='addr') moveMarker(fid,row._key,row);
+        };
         td.appendChild(inp);tr.appendChild(td);
       });
       tr.onclick=ev=>{if(ev.target.tagName==='INPUT') return;if(map&&row.geoOk&&row.lat){map.panTo(new kakao.maps.LatLng(row.lat,row.lng));map.setLevel(3);if(window.innerWidth<768) switchTab(0);}};
@@ -529,47 +830,16 @@ function renderTable(tbodyId,rowPrefix){
     });
   });
 }
+
 function deleteFile(fid){
   if(!confirm('파일을 삭제할까요?')) return;
   const f=files[fid];
-  if(f) f.rows.forEach(row=>{const mk=fid+':'+row._key;if(markerMap.has(mk)){markerMap.get(mk).setMap(null);markerMap.delete(mk);}});
-  delete files[fid];if(activeFileId===fid) activeFileId=null;renderAll();
+  if(f)f.rows.forEach(row=>{const mk=fid+':'+row._key;if(markerMap.has(mk)){markerMap.get(mk).setMap(null);markerMap.delete(mk);}});
+  delete files[fid];if(activeFileId===fid){activeFileId=null;loadedFileName=null;loadedFileSha=null;}
+  renderAll();
 }
 
-/* Firebase */
-function saveToFB(){
-  if(!activeFileId||!files[activeFileId]){alert("파일을 먼저 선택하세요.");return;}
-  const f=files[activeFileId];
-  db.ref('projects/'+activeFileId).set({name:f.name,year:f.year,corp:f.corp,region:f.region,rows:f.rows.map(r=>({seq:r.seq,road:r.road,code:r.code,settle:r.settle,crack:r.crack,wet:r.wet,age:r.age,history:r.history,sI:r.sI,sJ:r.sJ,sK:r.sK,sL:r.sL,sM:r.sM,sN:r.sN,grade:r.grade,opinion:r.opinion,addr:r.addr,infoS:r.infoS,infoT:r.infoT,lat:r.lat||null,lng:r.lng||null}))})
-  .then(()=>alert('☁ Firebase 저장 완료!')).catch(e=>alert('저장 실패: '+e.message));
-}
-function loadFromFB(){
-  const fbEl=document.getElementById('fbList'),mfbEl=document.getElementById('mFbList');
-  const setEl=(el,html)=>{if(el)el.innerHTML=html;};
-  setEl(fbEl,'<span style="color:var(--acc)">불러오는 중...</span>');
-  setEl(mfbEl,'<span style="color:var(--acc)">불러오는 중...</span>');
-  db.ref('projects').once('value',snap=>{
-    const data=snap.val();setEl(fbEl,'');setEl(mfbEl,'');
-    if(!data||Object.keys(data).length===0){setEl(fbEl,'<span style="color:#6b7280">저장된 데이터 없음</span>');setEl(mfbEl,'<span style="color:#6b7280">저장된 데이터 없음</span>');return;}
-    const buildList=(container)=>{
-      Object.entries(data).forEach(([fid,f])=>{
-        const loaded=!!files[fid];
-        const d=document.createElement('div');
-        d.style.cssText='display:flex;align-items:center;gap:6px;padding:7px 8px;background:var(--s2);border-radius:6px;margin-bottom:3px;cursor:pointer;border:1px solid '+(loaded?'var(--acc)':'transparent')+';font-size:11px;';
-        d.innerHTML='<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(loaded?'✅':'☁')+' '+f.name+'</span><small style="color:#6b7280;flex-shrink:0">'+(f.rows||[]).length+'건</small><b style="color:var(--red);cursor:pointer;margin-left:4px" onclick="event.stopPropagation();deleteFBProject(\''+fid+'\')">×</b>';
-        d.onclick=()=>{
-          if(loaded){activeFileId=fid;renderAll();}
-          else{const rows=(f.rows||[]).map((r,i)=>({...r,geoOk:!!(r.lat&&r.lng),_key:'r'+i}));files[fid]={name:f.name,year:f.year||'',corp:f.corp||'',region:f.region||'',rows,visible:true};activeFileId=fid;renderAll();rows.forEach(row=>{if(row.geoOk&&files[fid].visible)placeMarker(fid,row._key,row);});loadFromFB();}
-        };
-        container.appendChild(d);
-      });
-    };
-    if(fbEl) buildList(fbEl);if(mfbEl) buildList(mfbEl);
-  });
-}
-function deleteFBProject(fid){if(!confirm('Firebase에서 삭제할까요?')) return;db.ref('projects/'+fid).remove().then(()=>{if(files[fid]) deleteFile(fid);else loadFromFB();});}
-
-/* 엑셀 다운로드 */
+/* ── 엑셀 다운로드 ── */
 function exportXlsx(){
   if(!activeFileId||!files[activeFileId]){alert("파일을 선택하세요.");return;}
   const f=files[activeFileId];
