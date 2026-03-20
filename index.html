@@ -23,6 +23,7 @@
 -->
 <script src="https://www.gstatic.com/firebasejs/9.10.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.10.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.10.0/firebase-storage-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
@@ -168,6 +169,17 @@ tr.hl td{background:rgba(0,198,255,.1)!important;}
 <!-- 본문 -->
 <div class="main">
   <div class="side">
+    <!-- Firebase Storage 업로드 -->
+    <div style="margin:10px 10px 0;display:flex;gap:5px;">
+      <button onclick="document.getElementById('fbUpload').click()"
+              class="btn bs" style="flex:1;font-size:11px;padding:6px;">
+        ☁ FB에 엑셀 업로드
+      </button>
+    </div>
+    <input type="file" id="fbUpload" style="display:none" accept=".xlsx"
+           onchange="uploadToStorage(this.files[0]); this.value=''">
+    <div id="uploadProgress" style="display:none;margin:4px 10px;font-size:11px;color:var(--acc)"></div>
+
     <div class="dz" id="dz"
          onclick="document.getElementById('fi').click()"
          ondragover="event.preventDefault();this.classList.add('over')"
@@ -178,6 +190,16 @@ tr.hl td{background:rgba(0,198,255,.1)!important;}
     </div>
     <input type="file" id="fi" style="display:none" accept=".xlsx"
            onchange="readExcel(this.files[0]); this.value=''">
+    <!-- FB 저장 데이터 섹션 -->
+    <div style="margin:0 10px 6px;border-top:1px solid var(--bor);padding-top:8px;">
+      <div style="font-size:10px;color:#6b7280;margin-bottom:5px;">☁ Firebase 저장된 파일</div>
+      <button onclick="loadFromFB()" class="btn bs" style="width:100%;font-size:11px;padding:6px;margin-bottom:4px;">
+        🔄 FB 목록 새로고침
+      </button>
+      <div id="fbList" style="font-size:11px;color:#9ca3af;text-align:center;padding:4px 0;">
+        위 버튼으로 불러오세요
+      </div>
+    </div>
     <div id="flist"></div>
   </div>
 
@@ -235,7 +257,8 @@ const FB_CFG = {
 };
 
 firebase.initializeApp(FB_CFG);
-const db = firebase.database();
+const db      = firebase.database();
+const storage = firebase.storage();
 
 /* ══════════════════════════════════════════════════
    전역 상태
@@ -304,7 +327,7 @@ async function searchPlaces(q) {
       d1.documents.forEach(p => results.push({
         lat: parseFloat(p.y), lng: parseFloat(p.x),
         name: p.place_name,
-        addr: p.road_address_name || p.address_name
+        addr: p.address_name || p.road_address_name
       }));
       return results;
     }
@@ -320,7 +343,7 @@ async function searchPlaces(q) {
       d2.documents.forEach(p => results.push({
         lat: parseFloat(p.y), lng: parseFloat(p.x),
         name: p.address_name,
-        addr: p.road_address ? p.road_address.address_name : ''
+        addr: p.address_name + (p.road_address ? ' (' + p.road_address.address_name + ')' : '')
       }));
     }
   } catch(e) {}
@@ -384,9 +407,6 @@ function updateGBadge() {
       center: new kakao.maps.LatLng(37.4979, 127.0276), level: 6
     });
     kakaoReady = true;
-
-    // Firebase 저장 데이터 불러오기
-    loadFromFB();
 
     // 큐 처리 시작
     runGeoQueue();
@@ -618,7 +638,7 @@ function focusResult(lat, lng, name, addr) {
   if (srchCi) { srchCi.setMap(null); srchCi = null; }
 
   srchCi = new kakao.maps.Circle({
-    center:pos, radius:80, strokeWeight:3, strokeColor:'#ff00cc',
+    center:pos, radius:30, strokeWeight:2, strokeColor:'#ff00cc',
     strokeOpacity:.9, strokeStyle:'solid', fillColor:'#ff00cc', fillOpacity:.13
   });
   srchCi.setMap(map);
@@ -722,6 +742,67 @@ function deleteFile(fid) {
 }
 
 /* ══════════════════════════════════════════════════
+   Firebase Storage 엑셀 업로드
+   - 원본 xlsx 파일을 Storage에 저장
+   - 동시에 엑셀 내용을 읽어 지도에 표시 + Realtime DB 저장
+══════════════════════════════════════════════════ */
+async function uploadToStorage(file) {
+  if (!file) return;
+  const prog = document.getElementById('uploadProgress');
+  prog.style.display = 'block';
+  prog.textContent = '📤 업로드 중...';
+
+  try {
+    // 1. Firebase Storage에 원본 파일 저장
+    const ref  = storage.ref(`excel/${file.name}`);
+    const task = ref.put(file);
+
+    task.on('state_changed',
+      snap => {
+        const pct = Math.round(snap.bytesTransferred / snap.totalBytes * 100);
+        prog.textContent = `📤 업로드 중... ${pct}%`;
+      },
+      err => {
+        prog.textContent = `❌ 업로드 실패: ${err.message}`;
+      },
+      async () => {
+        prog.textContent = '✅ Storage 저장 완료! 지도에 표시 중...';
+        // 2. 동시에 엑셀 내용을 읽어 지도에도 표시
+        readExcel(file);
+        setTimeout(() => { prog.style.display = 'none'; }, 3000);
+      }
+    );
+  } catch(e) {
+    prog.textContent = `❌ 오류: ${e.message}`;
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   Firebase Storage 파일 목록 불러오기
+══════════════════════════════════════════════════ */
+async function listStorageFiles() {
+  try {
+    const ref   = storage.ref('excel');
+    const list  = await ref.listAll();
+    return list.items.map(item => ({ name: item.name, fullPath: item.fullPath, ref: item }));
+  } catch(e) {
+    return [];
+  }
+}
+
+async function downloadAndLoadFromStorage(fileRef, fileName) {
+  try {
+    const url  = await fileRef.getDownloadURL();
+    const resp = await fetch(url);
+    const blob = await resp.blob();
+    const file = new File([blob], fileName, { type: blob.type });
+    readExcel(file);
+  } catch(e) {
+    alert('파일 불러오기 실패: ' + e.message);
+  }
+}
+
+/* ══════════════════════════════════════════════════
    Firebase 저장 / 불러오기
    - 저장: ☁ 저장 버튼 클릭 시 (명시적)
    - 불러오기: 앱 시작 시 자동 (이전 작업 이어서)
@@ -746,19 +827,101 @@ function saveToFB() {
 }
 
 function loadFromFB() {
+  const fbListDiv = document.getElementById('fbList');
+  fbListDiv.innerHTML = '<span style="color:var(--acc)">불러오는 중...</span>';
+
   db.ref('projects').once('value', snap => {
     const data = snap.val();
-    if (!data) return;
+    fbListDiv.innerHTML = '';
+
+    // Storage 파일 목록도 함께 표시
+    listStorageFiles().then(storageFiles => {
+      if (storageFiles.length > 0) {
+        const stLabel = document.createElement('div');
+        stLabel.style.cssText = 'font-size:10px;color:#6b7280;margin:4px 0 3px';
+        stLabel.textContent = '📁 Storage 원본 파일';
+        fbListDiv.appendChild(stLabel);
+
+        storageFiles.forEach(sf => {
+          const si = document.createElement('div');
+          si.style.cssText = 'display:flex;align-items:center;gap:6px;padding:5px 6px;' +
+            'background:var(--s2);border-radius:5px;margin-bottom:3px;cursor:pointer;' +
+            'border:1px solid transparent;';
+          si.innerHTML = `<span style="font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+            📄 ${sf.name}</span>
+            <button onclick="event.stopPropagation();sf.ref.delete().then(()=>loadFromFB())"
+              style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;">×</button>`;
+          si.onclick = () => downloadAndLoadFromStorage(sf.ref, sf.name);
+          fbListDiv.appendChild(si);
+        });
+      }
+    });
+
+    if (!data || Object.keys(data).length === 0) {
+      const noData = document.createElement('div');
+      noData.style.cssText = 'font-size:11px;color:#6b7280;text-align:center;padding:4px 0;margin-top:4px';
+      noData.textContent = '저장된 처리 데이터 없음';
+      fbListDiv.appendChild(noData);
+      return;
+    }
+
+    const dbLabel = document.createElement('div');
+    dbLabel.style.cssText = 'font-size:10px;color:#6b7280;margin:4px 0 3px';
+    dbLabel.textContent = '🗄 처리된 데이터 (DB)';
+    fbListDiv.appendChild(dbLabel);
+
+    // FB 파일 목록 표시 (이미 로드된 파일 포함 전체)
     Object.entries(data).forEach(([fid, f]) => {
-      if (files[fid]) return;
-      const rows = (f.rows || []).map((r, i) => ({ ...r, geoOk:!!(r.lat&&r.lng), _key:'r'+i }));
-      files[fid] = { name:f.name, year:f.year||'', corp:f.corp||'', region:f.region||'', rows, visible:true };
-      if (!activeFileId) activeFileId = fid;
+      const isLoaded = !!files[fid];
+      const item = document.createElement('div');
+      item.style.cssText = 'display:flex;align-items:center;gap:6px;padding:5px 6px;' +
+        'background:var(--s2);border-radius:5px;margin-bottom:3px;cursor:pointer;' +
+        'border:1px solid ' + (isLoaded ? 'var(--acc)' : 'transparent');
+      item.innerHTML = `
+        <span style="font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+              title="${f.name}">
+          ${isLoaded ? '✅' : '☁'} ${f.name}
+        </span>
+        <span style="font-size:10px;color:#6b7280">${(f.rows||[]).length}건</span>
+        <b style="color:var(--red);cursor:pointer;flex-shrink:0;font-size:13px"
+           onclick="event.stopPropagation(); deleteFBProject('${fid}')">×</b>`;
+
+      item.onclick = () => {
+        if (isLoaded) {
+          // 이미 로드됨 → 해당 파일 활성화만
+          activeFileId = fid;
+          renderSidebar();
+          renderTable();
+        } else {
+          // 새로 로드
+          const rows = (f.rows || []).map((r, i) => ({
+            ...r, geoOk:!!(r.lat&&r.lng), _key:'r'+i
+          }));
+          files[fid] = {
+            name:f.name, year:f.year||'', corp:f.corp||'',
+            region:f.region||'', rows, visible:true
+          };
+          activeFileId = fid;
+          renderSidebar();
+          renderTable();
+          // 저장된 좌표로 마커 즉시 표시
+          rows.forEach(row => {
+            if (row.geoOk && files[fid].visible) placeMarker(fid, row._key, row);
+          });
+          loadFromFB(); // 목록 갱신
+        }
+      };
+      fbListDiv.appendChild(item);
     });
-    renderSidebar(); renderTable();
-    Object.entries(files).forEach(([fid, f]) => {
-      f.rows.forEach(row => { if (row.geoOk && f.visible) placeMarker(fid, row._key, row); });
-    });
+  });
+}
+
+function deleteFBProject(fid) {
+  if (!confirm('Firebase에서 이 파일을 삭제할까요?')) return;
+  db.ref(`projects/${fid}`).remove().then(() => {
+    // 로컬에도 있으면 함께 삭제
+    if (files[fid]) deleteFile(fid);
+    else loadFromFB();
   });
 }
 
