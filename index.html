@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>지하안전 관리시스템 v15.0</title>
+<!--
+  ╔══════════════════════════════════════════════════════════════╗
+  ║  지하안전 관리시스템 v15.0                                   ║
+  ║                                                              ║
+  ║  [배포 방법]                                                 ║
+  ║  1. GitHub 계정 생성 → 새 Repository 생성 (예: jihansafety) ║
+  ║  2. 이 파일을 index.html 로 이름 바꿔 업로드                 ║
+  ║  3. Repository Settings → Pages → Branch: main → Save       ║
+  ║  4. 생성된 URL: https://[계정].github.io/jihansafety/        ║
+  ║  5. 카카오 앱 > 플랫폼 > Web > 위 URL 등록                  ║
+  ║                                                              ║
+  ║  [키 정보 - 코드에 고정 내장됨]                              ║
+  ║  카카오 JS 키:      b135a8fd766f2c9aaf310d58c2f5235e         ║
+  ║  카카오 REST 키:    8ff7bae76b607414d5d36bbbe679930c         ║
+  ║  Firebase DB URL:   (아래 FB_CFG 참조)                       ║
+  ╚══════════════════════════════════════════════════════════════╝
+-->
+<script src="https://www.gstatic.com/firebasejs/9.10.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.10.0/firebase-database-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
+:root{
+  --bg:#0b101b; --sur:#111827; --s2:#1f2937; --bor:#374151;
+  --acc:#00c6ff; --red:#ef4444; --yel:#f59e0b; --txt:#f1f5f9;
+  --gen:#a855f7; --pri:#3b82f6; --urg:#ef4444;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--txt);
+     height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+
+/* 헤더 */
+header{padding:9px 14px;background:var(--sur);border-bottom:1px solid var(--bor);
+       display:flex;align-items:center;gap:10px;z-index:200;flex-shrink:0;}
+header h1{font-size:13px;white-space:nowrap;flex-shrink:0;}
+
+/* 검색바 */
+.sw{flex:1;max-width:400px;display:flex;align-items:center;gap:6px;
+    background:var(--s2);border:1px solid var(--bor);border-radius:6px;padding:4px 10px;}
+.sw input{background:none;border:none;outline:none;color:var(--txt);font-size:12px;width:100%;}
+.sw input::placeholder{color:#6b7280;}
+.sbtn{background:var(--acc);border:none;border-radius:4px;padding:5px 12px;
+      font-size:11px;font-weight:700;cursor:pointer;color:#000;white-space:nowrap;}
+.scl{background:none;border:none;color:#9ca3af;cursor:pointer;font-size:15px;padding:0 4px;}
+.scl:hover{color:var(--red);}
+
+/* 검색 결과 드롭다운 */
+#sRes{position:absolute;top:48px;left:50%;transform:translateX(-50%);width:400px;
+      max-height:260px;overflow-y:auto;background:var(--sur);
+      border:1px solid var(--acc);border-radius:8px;z-index:600;display:none;
+      box-shadow:0 8px 28px rgba(0,0,0,.7);}
+.sri{padding:9px 14px;cursor:pointer;border-bottom:1px solid var(--bor);font-size:12px;}
+.sri:hover{background:var(--s2);}
+.sri .sn{font-weight:600;color:var(--acc);}
+.sri .sa{color:#9ca3af;font-size:10px;margin-top:2px;}
+.sr0{padding:14px;text-align:center;color:#6b7280;font-size:12px;}
+
+.hr{display:flex;gap:8px;align-items:center;margin-left:auto;flex-shrink:0;}
+.btn{border:none;border-radius:5px;padding:7px 14px;font-weight:700;
+     cursor:pointer;font-size:12px;white-space:nowrap;}
+.ba{background:var(--acc);color:#000;}
+.bw{background:var(--yel);color:#000;}
+.bs{background:var(--s2);color:var(--txt);border:1px solid var(--bor);}
+.br{background:var(--red);color:#fff;}
+
+/* 본문 */
+.main{display:flex;flex:1;overflow:hidden;position:relative;}
+
+/* 사이드바 */
+.side{width:265px;border-right:1px solid var(--bor);display:flex;flex-direction:column;background:var(--sur);}
+.dz{margin:10px;padding:14px;border:2px dashed var(--bor);border-radius:8px;
+    text-align:center;cursor:pointer;font-size:11px;transition:.2s;line-height:1.9;}
+.dz:hover,.dz.over{border-color:var(--acc);background:rgba(0,198,255,.05);}
+#flist{flex:1;overflow-y:auto;padding:6px;}
+.fi{background:var(--s2);margin-bottom:5px;padding:8px 10px;border-radius:6px;
+    display:flex;align-items:center;font-size:11px;gap:7px;border:1px solid transparent;}
+.fi.act{border-color:var(--acc);}
+.fn{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;}
+.fn:hover{color:var(--acc);}
+
+/* 지도 */
+#map{flex:1;position:relative;}
+
+/* 배지들 */
+#cbadge{position:absolute;top:10px;left:50%;transform:translateX(-50%);
+        background:rgba(239,68,68,.92);color:#fff;padding:6px 18px;
+        border-radius:20px;font-size:12px;font-weight:700;z-index:300;
+        display:none;pointer-events:none;}
+#gbadge{position:absolute;top:10px;right:10px;background:rgba(17,24,39,.92);
+        border:1px solid var(--acc);border-radius:20px;padding:5px 14px;
+        font-size:11px;color:var(--acc);display:none;z-index:300;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
+#gbadge{animation:blink 1.2s infinite;}
+
+/* 마커 */
+.mw{position:relative;}
+.mc{width:24px;height:24px;border-radius:50%;border:2.5px solid rgba(255,255,255,.85);
+    color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;
+    justify-content:center;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.5);
+    transition:transform .15s;}
+.mc:hover{transform:scale(1.3);}
+.mc.gen{background:var(--gen);}
+.mc.pri{background:var(--pri);}
+.mc.urg{background:var(--urg);}
+.mt{position:absolute;bottom:32px;left:50%;transform:translateX(-50%);
+    background:rgba(8,14,26,.97);color:#fff;padding:9px 12px;border-radius:8px;
+    font-size:11px;min-width:200px;display:none;border:1.5px solid var(--acc);
+    z-index:1000;pointer-events:none;white-space:nowrap;}
+.mt::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);
+           border:6px solid transparent;border-top-color:var(--acc);}
+
+/* 범례 */
+#leg{position:absolute;bottom:28px;right:10px;background:rgba(10,15,26,.88);
+     border:1px solid var(--bor);border-radius:8px;padding:10px 14px;
+     z-index:200;font-size:11px;backdrop-filter:blur(6px);}
+.lt{color:var(--acc);font-weight:700;margin-bottom:8px;font-size:12px;}
+.lr{display:flex;align-items:center;gap:8px;margin-bottom:5px;}
+.ld{width:18px;height:18px;border-radius:50%;border:2px solid rgba(255,255,255,.7);flex-shrink:0;}
+.ld.gen{background:var(--gen);} .ld.pri{background:var(--pri);} .ld.urg{background:var(--urg);}
+
+/* 하단 테이블 */
+.bp{height:255px;background:var(--sur);border-top:2px solid var(--bor);overflow:auto;flex-shrink:0;}
+table{width:100%;border-collapse:collapse;font-size:11px;min-width:2200px;table-layout:fixed;}
+th{position:sticky;top:0;background:#141e30;padding:9px 8px;text-align:left;
+   border-bottom:1px solid var(--bor);color:var(--acc);z-index:10;}
+td{padding:3px 8px;border-bottom:1px solid #1a2840;vertical-align:middle;}
+tr:hover td{background:rgba(0,198,255,.04);}
+tr.hl td{background:rgba(0,198,255,.1)!important;}
+.ce{background:none;border:1px solid transparent;color:#fff;width:100%;
+    font-size:11px;outline:none;padding:5px;border-radius:3px;}
+.ce:focus{border-color:var(--acc);background:rgba(0,198,255,.08);}
+.qa{color:#facc15!important;}          /* 지오코딩 성공 */
+.qf{color:#ef4444!important;}          /* 지오코딩 실패 */
+.qw{color:#9ca3af!important;}          /* 대기 중 */
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🗺 지하안전 관리 <span style="font-weight:300;opacity:.5">v15.0</span></h1>
+
+  <!-- 검색창 -->
+  <div class="sw" id="sw">
+    <span style="color:#6b7280;font-size:13px">🔍</span>
+    <input id="sInp" type="text" placeholder="장소명 또는 지번·도로명 주소 검색"
+           onkeydown="if(event.key==='Enter')doSearch()"
+           oninput="if(!this.value)clearSearch()">
+    <button class="sbtn" onclick="doSearch()">검색</button>
+    <button class="scl" onclick="clearSearch()">✕</button>
+  </div>
+
+  <div class="hr">
+    <button class="btn bw" id="cbtn" onclick="toggleClick()">📍 클릭 추가 OFF</button>
+    <button class="btn bs"  onclick="saveToFB()">☁ 저장</button>
+    <button class="btn ba"  onclick="exportXlsx()">📊 다운로드</button>
+  </div>
+</header>
+
+<!-- 검색 결과 -->
+<div id="sRes"></div>
+
+<!-- 본문 -->
+<div class="main">
+  <div class="side">
+    <div class="dz" id="dz"
+         onclick="document.getElementById('fi').click()"
+         ondragover="event.preventDefault();this.classList.add('over')"
+         ondragleave="this.classList.remove('over')"
+         ondrop="this.classList.remove('over');handleDrop(event)">
+      📁 엑셀 드래그 또는 클릭 업로드<br>
+      <span style="color:#6b7280;font-size:10px">RawData 시트 · A~T열 · 6행부터</span>
+    </div>
+    <input type="file" id="fi" style="display:none" accept=".xlsx"
+           onchange="readExcel(this.files[0]); this.value=''">
+    <div id="flist"></div>
+  </div>
+
+  <div id="map">
+    <div id="cbadge">📍 지도를 클릭하여 새 지점 추가</div>
+    <div id="gbadge">🔄 주소 변환 중 (<span id="gcnt">0</span>건 남음)</div>
+    <div id="leg">
+      <div class="lt">범 례</div>
+      <div class="lr"><div class="ld gen"></div><span>일반등급</span></div>
+      <div class="lr"><div class="ld pri"></div><span>우선등급</span></div>
+      <div class="lr"><div class="ld urg"></div><span>긴급등급</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- 하단 테이블 -->
+<div class="bp">
+  <table>
+    <thead><tr>
+      <th width="45">순번</th>
+      <th width="95">조사측선</th>
+      <th width="115">조사번호</th>
+      <th width="60">침하</th><th width="65">균열</th><th width="60">습윤</th>
+      <th width="55">노후도</th><th width="100">침하이력</th>
+      <th width="45">침하점</th><th width="45">균열점</th><th width="45">습윤점</th>
+      <th width="45">노후점</th><th width="45">보수</th>
+      <th width="45">평가점</th><th width="60">평가등급</th>
+      <th width="110">조사자의견</th>
+      <th width="210">인접지번주소 <span style="color:#6b7280;font-weight:400">(수정→마커이동)</span></th>
+      <th width="170">부가정보1</th>
+      <th width="190">부가정보2</th>
+    </tr></thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════
+   API 키 (코드에 고정)
+   - 카카오 JS 키: 지도 렌더링용 (도메인 등록 필요)
+   - 카카오 REST 키: 지오코딩·검색용 (도메인 무관)
+   - GitHub Pages URL을 카카오 앱 도메인에 등록해야 지도 표시됨
+══════════════════════════════════════════════════ */
+const KAKAO_JS   = "b135a8fd766f2c9aaf310d58c2f5235e";
+const KAKAO_REST = "8ff7bae76b607414d5d36bbbe679930c";
+
+const FB_CFG = {
+  apiKey:            "AIzaSyARjCo49MamXAV-CmtB7F5SzQQ0XfYsJBk",
+  authDomain:        "ground-safety-maintenance-map.firebaseapp.com",
+  databaseURL:       "https://ground-safety-maintenance-map-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:         "ground-safety-maintenance-map",
+  storageBucket:     "ground-safety-maintenance-map.firebasestorage.app",
+  messagingSenderId: "1070365424197",
+  appId:             "1:1070365424197:web:f4d4506163000b8338812c"
+};
+
+firebase.initializeApp(FB_CFG);
+const db = firebase.database();
+
+/* ══════════════════════════════════════════════════
+   전역 상태
+══════════════════════════════════════════════════ */
+let map, kakaoReady = false;
+const files    = {};          // { fileId: { name, year, corp, region, rows[], visible } }
+let activeFileId = null;
+const markerMap  = new Map(); // "fid:key" → CustomOverlay
+let srchOv = null, srchCi = null;
+let clickMode = false;
+
+// 지오코딩 직렬 큐
+const geoQ = [];
+let geoRunning = false;
+
+/* ══════════════════════════════════════════════════
+   카카오 REST API 지오코딩
+   ★ file:// 포함 모든 환경에서 동작
+   ★ JS SDK geocoder 완전 대체
+══════════════════════════════════════════════════ */
+async function geocodeAddr(addr) {
+  if (!addr) return null;
+
+  const headers = { 'Authorization': `KakaoAK ${KAKAO_REST}` };
+
+  // 1차: 주소 검색 (지번·도로명)
+  try {
+    const r1 = await fetch(
+      `https://dapi.kakao.com/v2/local/search/address.json?query=${encodeURIComponent(addr)}&size=1`,
+      { headers }
+    );
+    const d1 = await r1.json();
+    if (d1.documents && d1.documents.length > 0) {
+      const doc = d1.documents[0];
+      return { lat: parseFloat(doc.y), lng: parseFloat(doc.x) };
+    }
+  } catch(e) { /* 네트워크 오류 → 2차 시도 */ }
+
+  // 2차: 키워드 검색 (건물명·랜드마크)
+  try {
+    const r2 = await fetch(
+      `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(addr)}&size=1`,
+      { headers }
+    );
+    const d2 = await r2.json();
+    if (d2.documents && d2.documents.length > 0) {
+      return { lat: parseFloat(d2.documents[0].y), lng: parseFloat(d2.documents[0].x) };
+    }
+  } catch(e) { /* 실패 */ }
+
+  return null;  // 변환 불가
+}
+
+async function searchPlaces(q) {
+  if (!q) return [];
+  const headers = { 'Authorization': `KakaoAK ${KAKAO_REST}` };
+  const results = [];
+
+  try {
+    const r1 = await fetch(
+      `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(q)}&size=8`,
+      { headers }
+    );
+    const d1 = await r1.json();
+    if (d1.documents && d1.documents.length > 0) {
+      d1.documents.forEach(p => results.push({
+        lat: parseFloat(p.y), lng: parseFloat(p.x),
+        name: p.place_name,
+        addr: p.road_address_name || p.address_name
+      }));
+      return results;
+    }
+  } catch(e) {}
+
+  try {
+    const r2 = await fetch(
+      `https://dapi.kakao.com/v2/local/search/address.json?query=${encodeURIComponent(q)}&size=8`,
+      { headers }
+    );
+    const d2 = await r2.json();
+    if (d2.documents && d2.documents.length > 0) {
+      d2.documents.forEach(p => results.push({
+        lat: parseFloat(p.y), lng: parseFloat(p.x),
+        name: p.address_name,
+        addr: p.road_address ? p.road_address.address_name : ''
+      }));
+    }
+  } catch(e) {}
+
+  return results;
+}
+
+/* ══════════════════════════════════════════════════
+   지오코딩 직렬 큐
+   - async/await + 300ms 간격
+   - 실패해도 다음 항목 진행
+══════════════════════════════════════════════════ */
+async function runGeoQueue() {
+  if (!kakaoReady || geoRunning || geoQ.length === 0) return;
+  geoRunning = true;
+
+  while (geoQ.length > 0) {
+    const { fid, rowIdx } = geoQ.shift();
+    updateGBadge();
+
+    const f = files[fid];
+    if (!f) continue;
+
+    const row = f.rows[rowIdx];
+    const result = await geocodeAddr(row.addr);
+
+    if (result) {
+      row.lat   = result.lat;
+      row.lng   = result.lng;
+      row.geoOk = true;
+      updateQCell(fid, row._key, true);
+      if (f.visible) placeMarker(fid, row._key, row);
+    } else {
+      row.geoOk = false;
+      updateQCell(fid, row._key, false);
+    }
+
+    // 300ms 대기 (API Rate Limit 방지)
+    await new Promise(res => setTimeout(res, 300));
+  }
+
+  geoRunning = false;
+  updateGBadge();
+}
+
+function updateGBadge() {
+  const n = geoQ.length;
+  document.getElementById('gcnt').textContent = n;
+  document.getElementById('gbadge').style.display = n > 0 ? 'block' : 'none';
+}
+
+/* ══════════════════════════════════════════════════
+   카카오 지도 JS SDK 초기화 (지도 렌더링만 사용)
+══════════════════════════════════════════════════ */
+(function(){
+  const s = document.createElement('script');
+  s.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_JS}&autoload=false`;
+  // ★ services 라이브러리 불필요 (REST API로 대체)
+  s.onload = () => kakao.maps.load(() => {
+    map = new kakao.maps.Map(document.getElementById('map'), {
+      center: new kakao.maps.LatLng(37.4979, 127.0276), level: 6
+    });
+    kakaoReady = true;
+
+    // Firebase 저장 데이터 불러오기
+    loadFromFB();
+
+    // 큐 처리 시작
+    runGeoQueue();
+
+    // 지도 클릭 → 신규 지점 추가
+    kakao.maps.event.addListener(map, 'click', async e => {
+      if (!clickMode) return;
+      if (!activeFileId) { alert("사이드바에서 파일명을 클릭하여 대상 파일을 선택하세요."); return; }
+
+      const lat = e.latLng.getLat(), lng = e.latLng.getLng();
+      // 역지오코딩: REST API 사용
+      let def = '';
+      try {
+        const r = await fetch(
+          `https://dapi.kakao.com/v2/local/geo/coord2address.json?x=${lng}&y=${lat}`,
+          { headers: { 'Authorization': `KakaoAK ${KAKAO_REST}` } }
+        );
+        const d = await r.json();
+        if (d.documents && d.documents.length > 0) {
+          const doc = d.documents[0];
+          def = doc.road_address ? doc.road_address.address_name : doc.address.address_name;
+        }
+      } catch(err) {}
+
+      const addr = prompt("추가할 지점의 주소를 확인·수정하세요:", def || '');
+      if (addr === null) return;
+
+      const row = {
+        seq: Date.now() % 100000, road:'수동추가', code:'ADD', settle:'양호',
+        crack:'양호', wet:'양호', age:'0', history:'-',
+        sI:'', sJ:'', sK:'', sL:'', sM:'', sN:'',
+        grade:'일반', opinion:'', addr: addr.trim(),
+        infoS:'직접입력', infoT:'현장확인필요',
+        lat, lng, geoOk: true,
+        _key: 'r' + Date.now()
+      };
+      files[activeFileId].rows.push(row);
+      renderTable();
+      placeMarker(activeFileId, row._key, row);
+    });
+  });
+  document.head.appendChild(s);
+})();
+
+/* ══════════════════════════════════════════════════
+   클릭 추가 모드
+══════════════════════════════════════════════════ */
+function toggleClick() {
+  clickMode = !clickMode;
+  const btn = document.getElementById('cbtn');
+  btn.textContent      = clickMode ? '📍 클릭 추가 ON' : '📍 클릭 추가 OFF';
+  btn.style.background = clickMode ? 'var(--red)' : 'var(--yel)';
+  document.getElementById('cbadge').style.display = clickMode ? 'block' : 'none';
+  if (map) map.setCursor(clickMode ? 'crosshair' : '');
+}
+
+/* ══════════════════════════════════════════════════
+   엑셀 읽기 (메모리 적재, Firebase 저장 없음)
+══════════════════════════════════════════════════ */
+function handleDrop(e) { e.preventDefault(); readExcel(e.dataTransfer.files[0]); }
+
+function readExcel(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const wb    = XLSX.read(new Uint8Array(ev.target.result), { type:'array' });
+    const sheet = wb.Sheets['RawData'] || wb.Sheets[wb.SheetNames[0]];
+    if (!sheet) { alert("RawData 시트를 찾을 수 없습니다."); return; }
+
+    const all    = XLSX.utils.sheet_to_json(sheet, { header:1, defval:'' });
+    const year   = String(all[1]?.[0] || '2025');
+    const corp   = String(all[1]?.[1] || '');
+    const region = String(all[1]?.[2] || '');
+
+    const rows = [];
+    for (let i = 5; i < all.length; i++) {
+      const r = all[i];
+      if (!r[0] && r[0] !== 0) continue;
+      rows.push({
+        seq:    r[0],
+        road:   String(r[1]  || ''),
+        code:   String(r[2]  || ''),
+        settle: String(r[3]  || ''),
+        crack:  String(r[4]  || ''),
+        wet:    String(r[5]  || ''),
+        age:    String(r[6]  || ''),
+        history:String(r[7]  || ''),
+        sI: r[8] !=='' ? r[8]  :'', sJ: r[9] !=='' ? r[9]  :'',
+        sK: r[10]!=='' ? r[10] :'', sL: r[11]!=='' ? r[11] :'',
+        sM: r[12]!=='' ? r[12] :'', sN: r[13]!=='' ? r[13] :'',
+        grade:  String(r[14] || '일반'),
+        opinion:String(r[15] || ''),
+        addr:   String(r[16] || '').trim(),  // Q열 (인접지번주소)
+        // R열(17) = 조사위치도 이미지 → 읽지 않음
+        infoS:  String(r[18] || ''),         // S열
+        infoT:  String(r[19] || ''),         // T열
+        lat: null, lng: null, geoOk: false,
+        _key: 'r' + i
+      });
+    }
+
+    const fid = 'F_' + Date.now();
+    files[fid] = { name:file.name, year, corp, region, rows, visible:true };
+    activeFileId = fid;
+
+    renderSidebar();
+    renderTable();   // 좌표 없이 테이블 즉시 표시
+
+    // 지오코딩 큐 추가
+    rows.forEach((_, idx) => geoQ.push({ fid, rowIdx: idx }));
+    updateGBadge();
+    if (kakaoReady && !geoRunning) runGeoQueue();
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+/* ══════════════════════════════════════════════════
+   마커 관리 (markerMap으로 참조 영구 유지)
+══════════════════════════════════════════════════ */
+function placeMarker(fid, key, row) {
+  if (!map || !row.geoOk || row.lat === null) return;
+  const mk = `${fid}:${key}`;
+
+  // 이미 있으면 위치만 이동
+  if (markerMap.has(mk)) {
+    markerMap.get(mk).setPosition(new kakao.maps.LatLng(row.lat, row.lng));
+    return;
+  }
+
+  const gc = row.grade === '긴급' ? 'urg' : row.grade === '우선' ? 'pri' : 'gen';
+  const wrap = document.createElement('div');
+  wrap.className = 'mw'; wrap.style.position = 'relative';
+
+  const dot = document.createElement('div');
+  dot.className = `mc ${gc}`;
+  dot.textContent = row.seq;
+
+  const tip = document.createElement('div');
+  tip.className = 'mt';
+  tip.innerHTML = `<b style="color:var(--acc)">${row.code||'-'}</b>
+    <span style="color:#9ca3af;font-size:10px"> ${row.grade}</span><br>
+    <span style="color:#d1d5db">${row.infoS||''}</span><br>
+    <small style="color:#6b7280">${row.addr||'주소없음'}</small>`;
+
+  wrap.appendChild(dot); wrap.appendChild(tip);
+  dot.onmouseenter = () => tip.style.display = 'block';
+  dot.onmouseleave = () => tip.style.display = 'none';
+  dot.onclick = () => {
+    const tr = document.getElementById('tr_' + CSS.escape(mk));
+    if (tr) { tr.scrollIntoView({block:'center',behavior:'smooth'}); tr.classList.add('hl'); setTimeout(()=>tr.classList.remove('hl'),1500); }
+  };
+
+  const ov = new kakao.maps.CustomOverlay({
+    position: new kakao.maps.LatLng(row.lat, row.lng), content: wrap,
+    zIndex: gc==='urg'?3:gc==='pri'?2:1
+  });
+  ov.setMap(map);
+  markerMap.set(mk, ov);
+}
+
+function setFileVisible(fid, visible) {
+  const f = files[fid];
+  if (!f) return;
+  f.visible = visible;
+  f.rows.forEach(row => {
+    const mk = `${fid}:${row._key}`;
+    if (markerMap.has(mk)) markerMap.get(mk).setMap(visible ? map : null);
+  });
+}
+
+function updateQCell(fid, key, ok) {
+  const mk  = `${fid}:${key}`;
+  const inp = document.querySelector(`#tr_${CSS.escape(mk)} .qInp`);
+  if (!inp) return;
+  inp.classList.remove('qa', 'qf', 'qw');
+  inp.classList.add(ok ? 'qa' : 'qf');
+  inp.title = ok ? '' : '⚠ 주소 변환 실패 — 지번 또는 도로명을 확인하세요';
+}
+
+/* ══════════════════════════════════════════════════
+   주소 수정 → 마커 즉시 이동 (REST API 사용)
+══════════════════════════════════════════════════ */
+async function moveMarker(fid, key, row) {
+  if (!row.addr) return;
+  const result = await geocodeAddr(row.addr);
+  if (result) {
+    row.lat = result.lat; row.lng = result.lng; row.geoOk = true;
+    updateQCell(fid, key, true);
+    placeMarker(fid, key, row);
+    if (map) map.panTo(new kakao.maps.LatLng(row.lat, row.lng));
+  } else {
+    row.geoOk = false;
+    updateQCell(fid, key, false);
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   검색 (REST API 사용)
+══════════════════════════════════════════════════ */
+async function doSearch() {
+  const q = document.getElementById('sInp').value.trim();
+  if (!q) return;
+  const rd = document.getElementById('sRes');
+
+  const items = await searchPlaces(q);
+  rd.innerHTML = '';
+
+  if (!items.length) {
+    rd.innerHTML = '<div class="sr0">검색 결과가 없습니다.</div>';
+  } else {
+    items.forEach(it => {
+      const d = document.createElement('div');
+      d.className = 'sri';
+      d.innerHTML = `<div class="sn">${it.name}</div><div class="sa">${it.addr}</div>`;
+      d.onclick = () => focusResult(it.lat, it.lng, it.name, it.addr);
+      rd.appendChild(d);
+    });
+  }
+  rd.style.display = 'block';
+}
+
+function focusResult(lat, lng, name, addr) {
+  document.getElementById('sRes').style.display = 'none';
+  if (!map) return;
+  const pos = new kakao.maps.LatLng(lat, lng);
+  map.setCenter(pos); map.setLevel(3);
+
+  if (srchOv) { srchOv.setMap(null); srchOv = null; }
+  if (srchCi) { srchCi.setMap(null); srchCi = null; }
+
+  srchCi = new kakao.maps.Circle({
+    center:pos, radius:80, strokeWeight:3, strokeColor:'#ff00cc',
+    strokeOpacity:.9, strokeStyle:'solid', fillColor:'#ff00cc', fillOpacity:.13
+  });
+  srchCi.setMap(map);
+  srchOv = new kakao.maps.CustomOverlay({
+    position:pos,
+    content:`<div onclick="clearSearch()" style="
+      background:rgba(200,0,180,.92);color:#fff;padding:6px 12px;border-radius:6px;
+      font-size:12px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.5);
+      white-space:nowrap;border:1.5px solid #fff;cursor:pointer;
+      transform:translate(-50%,-110%);">
+      📍 ${name}<br><span style="font-weight:400;font-size:10px">${addr}</span>
+    </div>`, yAnchor:0
+  });
+  srchOv.setMap(map);
+}
+
+function clearSearch() {
+  document.getElementById('sInp').value = '';
+  document.getElementById('sRes').style.display = 'none';
+  if (srchOv) { srchOv.setMap(null); srchOv = null; }
+  if (srchCi) { srchCi.setMap(null); srchCi = null; }
+}
+
+document.addEventListener('click', e => {
+  if (!document.getElementById('sw').contains(e.target) &&
+      !document.getElementById('sRes').contains(e.target))
+    document.getElementById('sRes').style.display = 'none';
+});
+
+/* ══════════════════════════════════════════════════
+   UI 렌더링
+══════════════════════════════════════════════════ */
+function renderSidebar() {
+  const fl = document.getElementById('flist');
+  fl.innerHTML = '';
+  Object.entries(files).forEach(([fid, f]) => {
+    const d = document.createElement('div');
+    d.className = `fi ${activeFileId===fid ? 'act' : ''}`;
+    d.innerHTML = `
+      <input type="checkbox" ${f.visible ? 'checked' : ''}
+             onchange="setFileVisible('${fid}', this.checked)">
+      <span class="fn" title="${f.name}"
+            onclick="activeFileId='${fid}'; renderSidebar()">📄 ${f.name}</span>
+      <small style="color:#6b7280">${f.rows.length}건</small>
+      <b style="color:var(--red);cursor:pointer;flex-shrink:0"
+         onclick="deleteFile('${fid}')">×</b>`;
+    fl.appendChild(d);
+  });
+}
+
+function renderTable() {
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+  const FIELDS = ['seq','road','code','settle','crack','wet','age','history',
+                  'sI','sJ','sK','sL','sM','sN','grade','opinion','addr','infoS','infoT'];
+
+  Object.entries(files).forEach(([fid, f]) => {
+    if (!f.visible) return;
+    f.rows.forEach(row => {
+      const mk = `${fid}:${row._key}`;
+      const tr = document.createElement('tr');
+      tr.id = 'tr_' + mk;
+
+      FIELDS.forEach(field => {
+        const td  = document.createElement('td');
+        const inp = document.createElement('input');
+        const isAddr = field === 'addr';
+        inp.className = 'ce' + (isAddr ? ' qw qInp' : '');
+        if (isAddr) {
+          if (row.geoOk)               { inp.classList.replace('qw','qa'); }
+          else if (row.lat !== null)   { inp.classList.replace('qw','qf'); }
+        }
+        inp.value = row[field] !== null && row[field] !== undefined ? row[field] : '';
+        inp.onchange = ev => {
+          row[field] = ev.target.value;
+          if (field === 'addr') moveMarker(fid, row._key, row);
+        };
+        td.appendChild(inp);
+        tr.appendChild(td);
+      });
+
+      tr.onclick = ev => {
+        if (ev.target.tagName==='INPUT') return;
+        if (map && row.geoOk && row.lat) { map.panTo(new kakao.maps.LatLng(row.lat,row.lng)); map.setLevel(3); }
+      };
+      tbody.appendChild(tr);
+    });
+  });
+}
+
+function deleteFile(fid) {
+  if (!confirm('파일을 삭제할까요?')) return;
+  const f = files[fid];
+  if (f) f.rows.forEach(row => {
+    const mk = `${fid}:${row._key}`;
+    if (markerMap.has(mk)) { markerMap.get(mk).setMap(null); markerMap.delete(mk); }
+  });
+  delete files[fid];
+  if (activeFileId===fid) activeFileId = null;
+  renderSidebar(); renderTable();
+}
+
+/* ══════════════════════════════════════════════════
+   Firebase 저장 / 불러오기
+   - 저장: ☁ 저장 버튼 클릭 시 (명시적)
+   - 불러오기: 앱 시작 시 자동 (이전 작업 이어서)
+══════════════════════════════════════════════════ */
+function saveToFB() {
+  if (!activeFileId || !files[activeFileId]) {
+    alert("파일명을 클릭하여 대상 파일을 먼저 선택하세요."); return;
+  }
+  const f = files[activeFileId];
+  db.ref(`projects/${activeFileId}`).set({
+    name:f.name, year:f.year, corp:f.corp, region:f.region,
+    rows: f.rows.map(r => ({
+      seq:r.seq, road:r.road, code:r.code, settle:r.settle, crack:r.crack,
+      wet:r.wet, age:r.age, history:r.history,
+      sI:r.sI, sJ:r.sJ, sK:r.sK, sL:r.sL, sM:r.sM, sN:r.sN,
+      grade:r.grade, opinion:r.opinion, addr:r.addr,
+      infoS:r.infoS, infoT:r.infoT,
+      lat: r.lat||null, lng: r.lng||null
+    }))
+  }).then(() => alert('☁ Firebase 저장 완료!\n동료도 같은 URL 접속 시 이 데이터를 볼 수 있습니다.'))
+    .catch(e => alert('저장 실패: ' + e.message));
+}
+
+function loadFromFB() {
+  db.ref('projects').once('value', snap => {
+    const data = snap.val();
+    if (!data) return;
+    Object.entries(data).forEach(([fid, f]) => {
+      if (files[fid]) return;
+      const rows = (f.rows || []).map((r, i) => ({ ...r, geoOk:!!(r.lat&&r.lng), _key:'r'+i }));
+      files[fid] = { name:f.name, year:f.year||'', corp:f.corp||'', region:f.region||'', rows, visible:true };
+      if (!activeFileId) activeFileId = fid;
+    });
+    renderSidebar(); renderTable();
+    Object.entries(files).forEach(([fid, f]) => {
+      f.rows.forEach(row => { if (row.geoOk && f.visible) placeMarker(fid, row._key, row); });
+    });
+  });
+}
+
+/* ══════════════════════════════════════════════════
+   엑셀 다운로드
+══════════════════════════════════════════════════ */
+function exportXlsx() {
+  if (!activeFileId || !files[activeFileId]) { alert("파일명을 클릭하여 선택하세요."); return; }
+  const f = files[activeFileId];
+  const colH = ["순번","조사측선명","손상구분번호","침하(mm)","균열","습윤","노후도(년)",
+    "지반침하발생이력","침하점수","균열점수","습윤점수","노후도점수","보수보강이력",
+    "평가점수","평가등급","조사자의견","인접지번주소","조사위치도","부가정보1","부가정보2"];
+  const rows = f.rows.map(r => [
+    r.seq,r.road,r.code,r.settle,r.crack,r.wet,r.age,r.history,
+    r.sI,r.sJ,r.sK,r.sL,r.sM,r.sN,r.grade,r.opinion,r.addr,'',r.infoS,r.infoT
+  ]);
+  const ws = XLSX.utils.aoa_to_sheet([
+    ["시행년도","시행사 구분","권역구 구분"],[f.year,f.corp,f.region],[],colH,...rows
+  ]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'RawData');
+  XLSX.writeFile(wb, `지하안전_갱신_${f.name}`);
+}
+</script>
+</body>
+</html>
