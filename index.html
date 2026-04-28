@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>지하안전 관리시스템 v19.0</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
 :root{
@@ -154,6 +155,30 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
 .del-btn{background:none;border:none;color:var(--red);cursor:pointer;
          font-size:15px;font-weight:700;padding:0 4px;line-height:1;}
 
+/* ── 보고서 생성 모달 ── */
+#rptModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);
+          z-index:950;align-items:center;justify-content:center;}
+#rptModal.show{display:flex;}
+.rpt-box{background:var(--sur);border:1px solid #7c3aed;border-radius:12px;
+         padding:22px 24px;width:min(460px,94vw);font-size:13px;}
+.rpt-title{font-size:15px;font-weight:700;color:#c4b5fd;margin-bottom:3px;}
+.rpt-sub{font-size:11px;color:#6b7280;margin-bottom:16px;}
+.rpt-row{margin-bottom:12px;}
+.rpt-lbl{font-size:11px;color:#9ca3af;margin-bottom:5px;font-weight:600;}
+.rpt-sel{width:100%;background:var(--s2);border:1px solid var(--bor);
+         border-radius:6px;padding:8px 10px;font-size:12px;color:var(--txt);outline:none;}
+.rpt-sel:focus{border-color:#7c3aed;}
+.rpt-info{background:rgba(124,58,237,.1);border-left:3px solid #7c3aed;
+          border-radius:0 6px 6px 0;padding:9px 12px;font-size:11px;
+          color:#c4b5fd;line-height:1.8;margin:12px 0;}
+.rpt-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;}
+.rpt-cancel{background:var(--s2);border:1px solid var(--bor);border-radius:6px;
+            padding:8px 16px;font-size:12px;color:var(--txt);cursor:pointer;}
+.rpt-ok{background:#7c3aed;border:none;border-radius:6px;
+        padding:8px 18px;font-size:12px;color:#fff;font-weight:700;cursor:pointer;}
+.rpt-ok:disabled{background:#4b3483;color:#9ca3af;cursor:default;}
+.rpt-prog{font-size:11px;color:#c4b5fd;margin-top:10px;text-align:center;min-height:18px;}
+
 /* 셀 입력 */
 .ce{background:none;border:1px solid transparent;color:#fff;
     width:100%;font-size:11px;outline:none;padding:4px;border-radius:3px;}
@@ -210,6 +235,41 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
 </head>
 <body>
 
+<!-- 보고서 생성 모달 -->
+<div id="rptModal">
+  <div class="rpt-box">
+    <div class="rpt-title">📄 hwpx 보고서 자동 생성</div>
+    <div class="rpt-sub">GitHub에서 hwpx 양식과 엑셀 파일을 선택하세요</div>
+
+    <div class="rpt-row">
+      <div class="rpt-lbl">① hwpx 양식 파일 선택 (GitHub)</div>
+      <select class="rpt-sel" id="rptHwpxSel">
+        <option value="">-- GitHub 목록 로딩 중 --</option>
+      </select>
+    </div>
+
+    <div class="rpt-row">
+      <div class="rpt-lbl">② 엑셀 데이터 파일 선택 (GitHub)</div>
+      <select class="rpt-sel" id="rptXlsxSel">
+        <option value="">-- GitHub 목록 로딩 중 --</option>
+      </select>
+    </div>
+
+    <div class="rpt-info">
+      ✓ 표지 지역명 · 날짜 · STA 구간 자동 입력<br>
+      ✓ 조사결과 집계 건수 자동 치환<br>
+      ✓ 육안조사 결과표 전체 행 자동 채우기<br>
+      ✓ 완성된 .hwpx 파일로 다운로드
+    </div>
+
+    <div class="rpt-footer">
+      <button class="rpt-cancel" onclick="closeRptModal()">취소</button>
+      <button class="rpt-ok" id="rptOkBtn" onclick="generateReport()">📄 보고서 생성 및 다운로드</button>
+    </div>
+    <div class="rpt-prog" id="rptProg"></div>
+  </div>
+</div>
+
 <!-- PAT 입력 모달 -->
 <div id="patModal">
   <div class="modal-box">
@@ -240,6 +300,8 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
     </button>
     <!-- 다운로드 -->
     <button class="btn ba hbtn" onclick="exportXlsx()">📊 다운로드</button>
+    <button class="btn hbtn" onclick="openRptModal()"
+            style="background:#7c3aed;color:#fff;">📄 보고서 생성</button>
   </div>
   <!-- 검색창 (2번째 줄) -->
   <div class="sw" id="sw">
@@ -297,6 +359,17 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
           🔑 저장 토큰 설정
         </button>
         <div id="patStatus" style="font-size:10px;color:#6b7280;text-align:center;margin-top:4px;"></div>
+      </div>
+
+      <!-- 보고서 생성 섹션 -->
+      <div class="sec" style="border-top-color:#7c3aed;">
+        <div class="sl" style="color:#c4b5fd;">📄 hwpx 보고서 생성</div>
+        <button onclick="openRptModal()" class="btn"
+                style="width:100%;font-size:11px;padding:7px;
+                       background:rgba(124,58,237,.15);border:1px solid #7c3aed;
+                       color:#c4b5fd;font-weight:700;">
+          📄 보고서 생성 열기
+        </button>
       </div>
     </div>
   </div>
@@ -412,6 +485,10 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
   </button>
   <button class="tb" id="tb3" onclick="switchTab(3)">
     <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>검색
+  </button>
+  <button class="tb" id="tb4" onclick="switchTab(4)"
+          style="color:#c4b5fd;">
+    <svg viewBox="0 0 24 24" style="stroke:#c4b5fd"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>보고서
   </button>
 </div>
 
@@ -537,6 +614,10 @@ function switchTab(n){
   if(n===3){
     ['tMap','tFile','tData'].forEach(id=>document.getElementById(id).style.display='none');
     setTimeout(()=>document.getElementById('sInp').focus(),80);
+  }
+  if(n===4){
+    ['tMap','tFile','tData'].forEach(id=>document.getElementById(id).style.display='none');
+    openRptModal();
   }
 }
 
@@ -929,7 +1010,304 @@ function deleteFile(fid){
   renderAll();
 }
 
-/* ── 엑셀 다운로드 ── */
+/* ══════════════════════════════════════
+   hwpx 보고서 자동 생성
+══════════════════════════════════════ */
+
+// STA 구간 매핑 테이블 (구조화.hwpx 기준)
+const STA_MAP = {
+  '신분당-강남구':    '-0km010 ~ 1km731',
+  '신분당-서초구':    '-0km010 ~ 8km756',
+  '신분당-성남시':    '8km756 ~ 18km461',
+  '경기철도-성남시':  '18km461 ~ 21km007',
+  '경기철도-용인시':  '21km007 ~ 27km387',
+  '경기철도-수원시':  '27km387 ~ 30km758',
+  '새서울철도-강남구':'–0km010 ~ –2km540',
+  '새서울철도-서초구':'–0km010 ~ –2km540',
+  '새서울철도-용산구':'–2km540 ~ –00km000',
+};
+
+// 광역시도 매핑
+const SIDO_MAP = {
+  '강남구':'서울시','서초구':'서울시','용산구':'서울시',
+  '성남시':'경기도','용인시':'경기도','수원시':'경기도',
+};
+
+async function openRptModal(){
+  document.getElementById('rptModal').classList.add('show');
+  document.getElementById('rptProg').textContent='';
+  await loadGitHubFilesForRpt();
+}
+function closeRptModal(){
+  document.getElementById('rptModal').classList.remove('show');
+  // 모바일: 보고서 탭에서 열었으면 지도 탭으로 복귀
+  if(window.innerWidth<768 && currentTab===4) switchTab(0);
+}
+
+async function loadGitHubFilesForRpt(){
+  const hwpxSel = document.getElementById('rptHwpxSel');
+  const xlsxSel = document.getElementById('rptXlsxSel');
+  hwpxSel.innerHTML = '<option value="">불러오는 중...</option>';
+  xlsxSel.innerHTML = '<option value="">불러오는 중...</option>';
+
+  try{
+    const resp = await fetch(
+      'https://api.github.com/repos/'+GH_OWNER+'/'+GH_REPO+'/contents/?ref='+GH_BRANCH,
+      {headers:{'Accept':'application/vnd.github.v3+json'}}
+    );
+    const list = await resp.json();
+    if(!Array.isArray(list)) throw new Error('목록 오류');
+
+    const hwpxFiles = list.filter(f=>f.name.endsWith('.hwpx'));
+    const xlsxFiles = list.filter(f=>f.name.endsWith('.xlsx')||f.name.endsWith('.xls'));
+
+    hwpxSel.innerHTML = hwpxFiles.length
+      ? hwpxFiles.map(f=>`<option value="${f.download_url}">${f.name}</option>`).join('')
+      : '<option value="">hwpx 파일 없음</option>';
+
+    xlsxSel.innerHTML = xlsxFiles.length
+      ? xlsxFiles.map(f=>`<option value="${f.download_url}|${f.name}">${f.name}</option>`).join('')
+      : '<option value="">xlsx 파일 없음</option>';
+  }catch(e){
+    hwpxSel.innerHTML='<option value="">오류: '+e.message+'</option>';
+    xlsxSel.innerHTML='<option value="">오류: '+e.message+'</option>';
+  }
+}
+
+async function generateReport(){
+  const hwpxUrl  = document.getElementById('rptHwpxSel').value;
+  const xlsxInfo = document.getElementById('rptXlsxSel').value;
+  if(!hwpxUrl||!xlsxInfo){alert('hwpx 양식과 엑셀 파일을 모두 선택하세요.');return;}
+
+  const [xlsxUrl, xlsxName] = xlsxInfo.split('|');
+  const prog   = document.getElementById('rptProg');
+  const okBtn  = document.getElementById('rptOkBtn');
+  okBtn.disabled = true;
+
+  try{
+    // ── 1. 파일명에서 메타정보 파싱
+    prog.textContent='📥 파일 파싱 중...';
+    const baseName = xlsxName.replace(/\.xlsx?$/i,'').replace(/-보고서$/,'');
+    const parts    = baseName.split('-');
+    // 예: 25-신분당-강남구 → [25, 신분당, 강남구]
+    const yearStr  = parts[0]||'25';   // 두자리
+    const corp     = parts[1]||'';     // 시행사
+    const region   = parts[2]||'';     // 지역명
+    const fullYear = '20'+yearStr;     // 2025
+    const now      = new Date();
+    const dateStr  = `${now.getFullYear()}. ${String(now.getMonth()+1).padStart(2,'0')}.`;
+    const staKey   = `${corp}-${region}`;
+    const staVal   = STA_MAP[staKey] || '구간정보없음';
+    const sido     = SIDO_MAP[region] || '경기도';
+
+    // ── 2. 엑셀(V2 시트) 읽기
+    prog.textContent='📊 엑셀 V2 시트 읽는 중...';
+    const xlsxResp   = await fetch(xlsxUrl);
+    const xlsxBuffer = await xlsxResp.arrayBuffer();
+    const wb         = XLSX.read(new Uint8Array(xlsxBuffer),{type:'array'});
+    const ws         = wb.Sheets['V2'] || wb.Sheets['RawData'];
+    if(!ws){throw new Error('V2 또는 RawData 시트를 찾을 수 없습니다.');}
+    const allRows = XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+
+    // V2: 5행=메타, 9행~=데이터 / RawData: 5행=헤더, 6행~=데이터
+    const isV2      = !!wb.Sheets['V2'];
+    const metaRow   = isV2 ? (allRows[4]||[]) : (allRows[1]||[]);
+    const dataStart = isV2 ? 8 : 5;    // 0-index
+    const dataRows  = allRows.slice(dataStart).filter(r=>r[0]||r[0]===0).filter(r=>r[0]!=='');
+
+    // 측선별 집계
+    const roadCount = {};
+    dataRows.forEach(r=>{
+      const road = String(r[1]||'').trim();
+      if(road) roadCount[road]=(roadCount[road]||0)+1;
+    });
+    const totalCount  = dataRows.length;
+    const maxRoad     = Object.entries(roadCount).sort((a,b)=>b[1]-a[1])[0];
+    const maxRoadName = maxRoad?.[0]||'';
+    const maxRoadCnt  = maxRoad?.[1]||0;
+    const maxRoadPct  = totalCount>0?(maxRoadCnt/totalCount*100).toFixed(1):'0.0';
+
+    // 조사기간
+    const period = String(isV2 ? (metaRow[6]||'') : (metaRow[0]||''))
+      .replace(/\n/g,' ').trim();
+
+    // ── 3. hwpx 파일 가져오기 → JSZip으로 열기
+    prog.textContent='📄 hwpx 파일 불러오는 중...';
+    const hwpxResp   = await fetch(hwpxUrl);
+    const hwpxBuffer = await hwpxResp.arrayBuffer();
+    const zip        = await JSZip.loadAsync(hwpxBuffer);
+
+    // ── 4. section0.xml 텍스트 치환
+    prog.textContent='✏ section0 치환 중...';
+    let s0 = await zip.file('Contents/section0.xml').async('string');
+
+    // 표지 제목: (용인시) → (지역명)
+    s0 = s0.replace(/신분당선 지하안전점검 \([^)]+\)/g,
+                    `신분당선 지하안전점검 (${region})`);
+    // 날짜
+    s0 = s0.replace(/\d{4}\. \d{2}\./g, dateStr);
+    // STA 구간 (여러 곳)
+    const staPattern = new RegExp(Object.values(STA_MAP).map(v=>
+      v.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|'),'g');
+    s0 = s0.replace(staPattern, staVal);
+    // 광역시도/시군구 치환 (메타행 기준)
+    s0 = s0.replace(/>경기도</g, `>${sido}<`);
+    s0 = replaceFirstTextInXml(s0, '용인시', region);
+    // 총 건수 (section0 내 숫자)
+    s0 = s0.replace(/>112</g, `>${totalCount}<`);
+    // 조사결과 문장: "총 112개소", "총 112개" 등
+    s0 = s0.replace(/총\s*<\/hp:t><\/hp:run>[^<]*<hp:run[^>]*><hp:t>\d+</g,
+      m => m.replace(/\d+<$/, totalCount+'<'));
+    // 가장 많은 측선
+    s0 = replaceAllText(s0, maxRoadName, maxRoadName);  // 이미 맞으면 유지
+    zip.file('Contents/section0.xml', s0);
+
+    // ── 5. section2.xml 치환 (종합결론 숫자)
+    prog.textContent='✏ section2 치환 중...';
+    let s2 = await zip.file('Contents/section2.xml').async('string');
+    s2 = s2.replace(/>112</g, `>${totalCount}<`);
+    // STA
+    s2 = s2.replace(staPattern, staVal);
+    // 측선별 집계표 행 치환
+    s2 = replaceRoadCountsInS2(s2, roadCount, totalCount);
+    zip.file('Contents/section2.xml', s2);
+
+    // ── 6. section1.xml 결과표 행 채우기
+    prog.textContent='✏ 결과표 채우는 중...';
+    let s1 = await zip.file('Contents/section1.xml').async('string');
+    s1 = fillResultTable(s1, dataRows, metaRow, isV2, sido, region, period);
+    zip.file('Contents/section1.xml', s1);
+
+    // ── 7. 다운로드
+    prog.textContent='💾 파일 생성 중...';
+    const outBlob = await zip.generateAsync({type:'blob',compression:'DEFLATE'});
+    const outName = `신분당선 지하안전점검 육안조사 실시결과 보고서 (${region} ${fullYear}년).hwpx`;
+    const url     = URL.createObjectURL(outBlob);
+    const a       = document.createElement('a');
+    a.href=url; a.download=outName; a.click();
+    URL.revokeObjectURL(url);
+
+    prog.textContent='✅ 보고서 생성 완료! 다운로드됩니다.';
+    setTimeout(()=>closeRptModal(), 2000);
+
+  }catch(e){
+    prog.textContent='❌ 오류: '+e.message;
+    console.error(e);
+  }finally{
+    okBtn.disabled=false;
+  }
+}
+
+/* ── XML 헬퍼: 첫 번째 일치 텍스트만 치환 ── */
+function replaceFirstTextInXml(xml, from, to){
+  return xml.replace(new RegExp('(<hp:t[^>]*>)'+escRe(from)+'(</hp:t>)'), '$1'+to+'$2');
+}
+function replaceAllText(xml, from, to){
+  return xml.replace(new RegExp('(<hp:t[^>]*>)'+escRe(from)+'(</hp:t>)','g'),'$1'+to+'$2');
+}
+function escRe(s){return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');}
+
+/* ── section2 측선별 집계표 행 치환 ── */
+function replaceRoadCountsInS2(s2, roadCount, totalCount){
+  // 기존 데이터 행(경기도/용인시/신수로/14/-/-/14/0개소 형태)을
+  // 새 측선별 건수로 교체
+  const rows = Object.entries(roadCount);
+  // 기존 행들을 측선 순서대로 교체 (단순 건수 숫자 교체)
+  rows.forEach(([, cnt])=>{
+    s2 = s2.replace(/(<hp:t[^>]*>)\d+(<\/hp:t><\/hp:run>(?:(?!<hp:tr).)*?<hp:run[^>]*><hp:t>-)/,
+      `$1${cnt}$2`);
+  });
+  // 합계 행
+  s2 = s2.replace(/>합계<\/hp:t>.*?>\d+<\/hp:t>/s,
+    m => m.replace(/>\d+<\/hp:t>$/, `>${totalCount}</hp:t>`));
+  return s2;
+}
+
+/* ── section1 결과표 행 채우기 ── */
+function fillResultTable(s1, dataRows, metaRow, isV2, sido, region, period){
+  // 메타 행 치환 (광역시도, 시군구, 조사기간 등)
+  s1 = s1.replace(/>경기도</g, `>${sido}<`);
+  s1 = replaceFirstTextInXml(s1, '용인시', region);
+  if(period) s1 = replaceFirstTextInXml(s1, '2025.03.17.~05.31', period);
+
+  // 데이터 행: 기존 행(행05~행19=첫페이지15건, 행22~이후=2페이지)에 덮어쓰기
+  // 셀 내 <hp:t> 텍스트를 교체하는 방식
+  const trMatches = [...s1.matchAll(/<hp:tr\b[^>]*>.*?<\/hp:tr>/gs)];
+
+  // 첫 데이터 행 인덱스: 행05 (0-index)
+  const firstDataRowIdx = 5;
+  // 2페이지 첫 데이터 행 인덱스: 행22
+  const page2RowIdx = 22;
+
+  let result = s1;
+
+  dataRows.forEach((row, i)=>{
+    // V2: A=순번, B=측선, C=코드, D=침하, E=균열, F=습윤, G=노후도,
+    //     H=이력, I=침하점, J=균열점, K=습윤점, L=노후점, M=보수, N=평가점, O=등급, P=의견
+    const vals = [
+      str(row[0]),  // 순번
+      str(row[1]),  // 측선명
+      str(row[2]),  // 손상구간번호
+      str(row[3]),  // 침하
+      str(row[4]),  // 균열
+      str(row[5]),  // 습윤
+      str(row[6]),  // 노후도
+      str(row[7]),  // 이력
+      str(row[8]),  // 침하점
+      str(row[9]),  // 균열점
+      str(row[10]), // 습윤점
+      str(row[11]), // 노후점
+      str(row[12]), // 보수보강
+      str(row[13]), // 평가점수
+      str(row[14]), // 평가등급
+      str(row[15]), // 조사자의견 (0이면 빈칸)
+    ];
+
+    // 행 인덱스 결정 (첫 페이지: 0~14 → trIdx 5~19, 2페이지~: 15~→ trIdx 22~)
+    const trIdx = i < 15 ? firstDataRowIdx + i : page2RowIdx + (i - 15);
+    if(trIdx >= trMatches.length) return;
+
+    const oldTr = trMatches[trIdx][0];
+    const newTr = setCellTexts(oldTr, vals);
+    result = result.replace(oldTr, newTr);
+  });
+
+  return result;
+}
+
+/* 행 XML 내 셀 순서대로 텍스트 교체 */
+function setCellTexts(trXml, vals){
+  let idx = 0;
+  return trXml.replace(/(<hp:tc\b[^>]*>)(.*?)(<\/hp:tc>)/gs, (match, open, inner, close)=>{
+    if(idx >= vals.length) return match;
+    const val = vals[idx++];
+    // 조사자의견이 "0"이면 빈칸
+    const text = (val==='0'||val==='0.0') ? '' : val;
+    // 기존 <hp:t> 교체
+    const newInner = inner.replace(/<hp:run charPrIDRef="(\d+)">(<hp:t[^>]*>)[^<]*(<\/hp:t>)<\/hp:run>/,
+      `<hp:run charPrIDRef="$1">$2${escapeXml(text)}$3</hp:run>`);
+    // <hp:t>가 없는 빈 run에 텍스트 추가
+    const newInner2 = newInner.replace(/<hp:run charPrIDRef="(\d+)"\/>/,
+      text ? `<hp:run charPrIDRef="$1"><hp:t>${escapeXml(text)}</hp:t></hp:run>` : '$&');
+    return open+newInner2+close;
+  });
+}
+
+function str(v){ return v!==null&&v!==undefined ? String(v).trim() : ''; }
+function escapeXml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+/* ── 보고서 모달 열기/닫기 ── */
+function openRptModal(){
+  document.getElementById('rptModal').classList.add('show');
+  document.getElementById('rptProg').textContent='';
+  document.getElementById('rptOkBtn').disabled=false;
+  loadGitHubFilesForRpt();
+}
+function closeRptModal(){
+  document.getElementById('rptModal').classList.remove('show');
+}
+
+
 function exportXlsx(){
   if(!activeFileId||!files[activeFileId]){alert("파일을 선택하세요.");return;}
   const f=files[activeFileId];
