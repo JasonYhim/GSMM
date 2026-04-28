@@ -4,8 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>지하안전 관리시스템 v19.0</title>
-<script src="https://www.gstatic.com/firebasejs/9.10.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.10.0/firebase-database-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
@@ -144,6 +142,17 @@ td{padding:3px 7px;border-bottom:1px solid #1a2840;vertical-align:middle;}
 tr:hover td{background:rgba(0,198,255,.04);}
 tr.hl td{background:rgba(0,198,255,.1)!important;}
 tr.changed td{background:rgba(245,158,11,.06)!important;}
+tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록 */
+/* 신구 배지 */
+.badge-new{display:inline-block;background:var(--grn);color:#fff;
+           font-size:9px;font-weight:700;padding:2px 5px;border-radius:4px;
+           letter-spacing:.3px;line-height:1.4;}
+.badge-mod{display:inline-block;background:var(--yel);color:#000;
+           font-size:9px;font-weight:700;padding:2px 5px;border-radius:4px;
+           letter-spacing:.3px;line-height:1.4;}
+/* 삭제 버튼 셀 */
+.del-btn{background:none;border:none;color:var(--red);cursor:pointer;
+         font-size:15px;font-weight:700;padding:0 4px;line-height:1;}
 
 /* 셀 입력 */
 .ce{background:none;border:1px solid transparent;color:#fff;
@@ -352,6 +361,7 @@ tr.changed td{background:rgba(245,158,11,.06)!important;}
       <div class="bp">
         <table>
           <thead><tr>
+            <th width="32">신구</th>
             <th width="42">순번</th><th width="88">조사측선</th><th width="108">조사번호</th>
             <th width="58">침하</th><th width="62">균열</th><th width="58">습윤</th>
             <th width="52">노후도</th><th width="92">침하이력</th>
@@ -360,6 +370,7 @@ tr.changed td{background:rgba(245,158,11,.06)!important;}
             <th width="58">등급</th><th width="100">조사의견</th>
             <th width="195">인접지번주소</th>
             <th width="145">부가정보1</th><th width="165">부가정보2</th>
+            <th width="36">삭제</th>
           </tr></thead>
           <tbody id="tbody"></tbody>
         </table>
@@ -370,6 +381,7 @@ tr.changed td{background:rgba(245,158,11,.06)!important;}
     <div class="bp" id="deskBp">
       <table>
         <thead><tr>
+          <th width="32">신구</th>
           <th width="42">순번</th><th width="88">조사측선</th><th width="108">조사번호</th>
           <th width="58">침하</th><th width="62">균열</th><th width="58">습윤</th>
           <th width="52">노후도</th><th width="92">침하이력</th>
@@ -378,6 +390,7 @@ tr.changed td{background:rgba(245,158,11,.06)!important;}
           <th width="58">등급</th><th width="100">조사의견</th>
           <th width="195">인접지번주소 <span style="color:#6b7280;font-weight:400">(수정→마커)</span></th>
           <th width="145">부가정보1</th><th width="165">부가정보2</th>
+          <th width="36">삭제</th>
         </tr></thead>
         <tbody id="tbody2"></tbody>
       </table>
@@ -414,9 +427,7 @@ const KAKAO_JS='b135a8fd766f2c9aaf310d58c2f5235e';
 const KAKAO_REST='8ff7bae76b607414d5d36bbbe679930c';
 const GH_OWNER='JasonYhim', GH_REPO='GSMM', GH_BRANCH='main';
 
-/* ── Firebase (내부 유지, 직접 노출 안 함) ── */
-const FB_CFG={apiKey:'AIzaSyARjCo49MamXAV-CmtB7F5SzQQ0XfYsJBk',authDomain:'ground-safety-maintenance-map.firebaseapp.com',databaseURL:'https://ground-safety-maintenance-map-default-rtdb.asia-southeast1.firebasedatabase.app',projectId:'ground-safety-maintenance-map',storageBucket:'ground-safety-maintenance-map.firebasestorage.app',messagingSenderId:'1070365424197',appId:'1:1070365424197:web:f4d4506163000b8338812c'};
-firebase.initializeApp(FB_CFG);
+/* ── GitHub 저장 설정 ── */
 
 /* ── 전역 상태 ── */
 let map, kakaoReady=false;
@@ -437,12 +448,18 @@ let loadedFileSha=null;      // 현재 파일의 GitHub SHA (덮어쓰기용)
 /* ── PAT 관리 ── */
 function getPat(){return localStorage.getItem('gh_pat')||'';}
 function savePat(){
-  const v=document.getElementById('patInput').value.trim();
+  // ★ 스마트폰 붙여넣기 시 공백·줄바꿈·탭·보이지 않는 문자 모두 제거
+  const v=document.getElementById('patInput').value
+    .replace(/[\r\n\t\u00a0\u200b\ufeff]/g,'').trim();
   if(!v){alert('토큰을 입력하세요.');return;}
+  // github_pat_ 또는 ghp_ 으로 시작하는지 확인
+  if(!v.startsWith('github_pat_')&&!v.startsWith('ghp_')){
+    if(!confirm('토큰 형식이 올바르지 않을 수 있습니다.\n(github_pat_ 또는 ghp_ 으로 시작해야 함)\n그래도 저장할까요?\n\n입력값 앞부분: '+v.substring(0,15)+'...')) return;
+  }
   localStorage.setItem('gh_pat',v);
   closePatModal();
   updatePatStatus();
-  alert('✅ 토큰이 저장되었습니다.');
+  alert('✅ 토큰 저장 완료!\n앞 15자 확인: '+v.substring(0,15)+'...\n\n올바르지 않으면 다시 설정해주세요.');
 }
 function openPatModal(){
   document.getElementById('patInput').value=getPat();
@@ -579,7 +596,10 @@ function updateGBadge(){const n=geoQ.length;document.getElementById('gcnt').text
         if(d.documents?.length>0){const doc=d.documents[0];def=doc.road_address?doc.road_address.address_name:doc.address.address_name;}}catch(err){}
       const addr=prompt("추가할 지점의 주소:",def||'');
       if(addr===null) return;
-      const row={seq:Date.now()%100000,road:'수동추가',code:'ADD',settle:'양호',crack:'양호',wet:'양호',age:'0',history:'-',sI:'',sJ:'',sK:'',sL:'',sM:'',sN:'',grade:'일반',opinion:'',addr:addr.trim(),infoS:'직접입력',infoT:'현장확인필요',lat,lng,geoOk:true,_key:'r'+Date.now()};
+      const row={seq:Date.now()%100000,road:'수동추가',code:'ADD',settle:'양호',crack:'양호',wet:'양호',age:'0',history:'-',sI:'',sJ:'',sK:'',sL:'',sM:'',sN:'',grade:'일반',opinion:'',addr:addr.trim(),infoS:'직접입력',infoT:'현장확인필요',lat,lng,geoOk:true,
+        isNew:true,        // ★ 지도 클릭으로 신규 추가
+        isModified:false,
+        _key:'r'+Date.now()};
       files[activeFileId].rows.push(row);
       setDirty(true);
       renderAll();
@@ -621,7 +641,10 @@ function processSheet(sheet,name){
   const rows=[];
   for(let i=5;i<all.length;i++){
     const r=all[i]; if(!r[0]&&r[0]!==0) continue;
-    rows.push({seq:r[0],road:String(r[1]||''),code:String(r[2]||''),settle:String(r[3]||''),crack:String(r[4]||''),wet:String(r[5]||''),age:String(r[6]||''),history:String(r[7]||''),sI:r[8]!==''?r[8]:'',sJ:r[9]!==''?r[9]:'',sK:r[10]!==''?r[10]:'',sL:r[11]!==''?r[11]:'',sM:r[12]!==''?r[12]:'',sN:r[13]!==''?r[13]:'',grade:String(r[14]||'일반'),opinion:String(r[15]||''),addr:String(r[16]||'').trim(),infoS:String(r[18]||''),infoT:String(r[19]||''),lat:null,lng:null,geoOk:false,_key:'r'+i});
+    rows.push({seq:r[0],road:String(r[1]||''),code:String(r[2]||''),settle:String(r[3]||''),crack:String(r[4]||''),wet:String(r[5]||''),age:String(r[6]||''),history:String(r[7]||''),sI:r[8]!==''?r[8]:'',sJ:r[9]!==''?r[9]:'',sK:r[10]!==''?r[10]:'',sL:r[11]!==''?r[11]:'',sM:r[12]!==''?r[12]:'',sN:r[13]!==''?r[13]:'',grade:String(r[14]||'일반'),opinion:String(r[15]||''),addr:String(r[16]||'').trim(),infoS:String(r[18]||''),infoT:String(r[19]||''),lat:null,lng:null,geoOk:false,
+      isNew:false,   // ★ GitHub에서 불러온 기존 데이터
+      isModified:false,
+      _key:'r'+i});
   }
   const fid='F_'+Date.now();
   files[fid]={name,year,corp,region,rows,visible:true};
@@ -698,18 +721,33 @@ async function saveToGitHub(){
 
   try{
     ['savBtn','mSavBtn'].forEach(id=>{const b=document.getElementById(id);if(b){b.textContent='💾 저장 중...';b.disabled=true;}});
-    const resp=await fetch('https://api.github.com/repos/'+GH_OWNER+'/'+GH_REPO+'/contents/'+encodeURIComponent(loadedFileName),{
-      method:'PUT',
-      headers:{'Authorization':'token '+pat,'Accept':'application/vnd.github.v3+json','Content-Type':'application/json'},
-      body:JSON.stringify(body)
-    });
+
+    // ★ Fine-grained(github_pat_)는 Bearer, Classic(ghp_)는 token
+    //    둘 다 시도하여 인증 방식 문제 해결
+    const ghFetch=(authType)=>fetch(
+      'https://api.github.com/repos/'+GH_OWNER+'/'+GH_REPO+'/contents/'+encodeURIComponent(loadedFileName),
+      {method:'PUT',
+       headers:{'Authorization':authType+' '+pat,'Accept':'application/vnd.github.v3+json','Content-Type':'application/json'},
+       body:JSON.stringify(body)}
+    );
+
+    // 1차: Bearer (Fine-grained token 권장 방식)
+    let resp=await ghFetch('Bearer');
+    // 2차: 401이면 token 방식으로 재시도
+    if(resp.status===401) resp=await ghFetch('token');
+
     const result=await resp.json();
     if(resp.ok){
-      loadedFileSha=result.content?.sha||loadedFileSha; // SHA 갱신
+      loadedFileSha=result.content?.sha||loadedFileSha;
       setSaveOk();
-      loadGitHub(); // 목록 갱신
+      loadGitHub();
     } else {
-      alert('저장 실패: '+((result.message)||resp.status));
+      let msg='저장 실패('+resp.status+'): '+(result.message||'');
+      if(resp.status===401) msg+='\n\n🔑 토큰 인증 실패\n해결방법:\n① 🔑 저장 토큰 설정에서 토큰을 다시 입력\n② GitHub 토큰 권한(Contents: Read and write) 확인\n③ 토큰 만료 여부 확인';
+      if(resp.status===403) msg+='\n\n⚠ 쓰기 권한 없음\nGitHub 토큰의 Contents 권한을 Read and write로 변경하세요';
+      if(resp.status===404) msg+='\n\n⚠ repository 또는 파일을 찾을 수 없습니다';
+      if(resp.status===422) msg+='\n\n⚠ SHA 불일치: GitHub 목록에서 파일을 다시 불러온 후 저장하세요';
+      alert(msg);
       setDirty(true);
     }
   }catch(e){alert('저장 오류: '+e.message);setDirty(true);}
@@ -809,23 +847,75 @@ function renderTable(tbodyId,rowPrefix,isMobile){
     f.rows.forEach(row=>{
       const mk=fid+':'+row._key;
       const tr=document.createElement('tr');tr.id=rowPrefix+mk;
+
+      // ── 행 배경: 신규=연초록, 수정=연노랑
+      if(row.isNew)          tr.classList.add('row-new');
+      else if(row.isModified) tr.classList.add('changed');
+
+      // ── 신구 배지 셀 (첫 번째 열)
+      const badgeTd=document.createElement('td');
+      badgeTd.style.cssText='text-align:center;white-space:nowrap;';
+      if(row.isNew){
+        badgeTd.innerHTML='<span class="badge-new">N</span>';
+        badgeTd.title='신규 추가된 데이터';
+      } else if(row.isModified){
+        badgeTd.innerHTML='<span class="badge-mod">M</span>';
+        badgeTd.title='수정된 데이터';
+      }
+      tr.appendChild(badgeTd);
+
+      // ── 데이터 셀
       FIELDS.forEach(field=>{
         const td=document.createElement('td');const inp=document.createElement('input');
         const isA=field==='addr';
         inp.className='ce'+(isA?' qw qInp':'');
         if(isA){if(row.geoOk)inp.classList.replace('qw','qa');else if(row.lat!==null)inp.classList.replace('qw','qf');}
         inp.value=row[field]!==null&&row[field]!==undefined?row[field]:'';
-        // 모바일 탭은 편집 모드일 때만 수정 가능
         if(isMobile) inp.disabled=!editMode;
         inp.onchange=ev=>{
           row[field]=ev.target.value;
-          tr.classList.add('changed');
+          // 기존 데이터 수정 시 isModified 표시
+          if(!row.isNew) {
+            row.isModified=true;
+            tr.classList.remove('row-new');
+            tr.classList.add('changed');
+            // 배지 M으로 교체
+            const bd=tr.querySelector('td:first-child');
+            if(bd&&!bd.querySelector('.badge-mod')){
+              bd.innerHTML='<span class="badge-mod">M</span>';
+              bd.title='수정된 데이터';
+            }
+          }
           setDirty(true);
           if(field==='addr') moveMarker(fid,row._key,row);
         };
         td.appendChild(inp);tr.appendChild(td);
       });
-      tr.onclick=ev=>{if(ev.target.tagName==='INPUT') return;if(map&&row.geoOk&&row.lat){map.panTo(new kakao.maps.LatLng(row.lat,row.lng));map.setLevel(3);if(window.innerWidth<768) switchTab(0);}};
+
+      // ── 삭제 버튼 셀 (마지막 열)
+      const delTd=document.createElement('td');
+      delTd.style.cssText='text-align:center;';
+      const delBtn=document.createElement('button');
+      delBtn.className='del-btn';
+      delBtn.textContent='✕';
+      delBtn.title='이 행 삭제';
+      delBtn.onclick=e=>{
+        e.stopPropagation();
+        if(!confirm('이 행을 삭제할까요?\n순번: '+row.seq+' / '+row.code)) return;
+        // 마커 제거
+        if(markerMap.has(mk)){markerMap.get(mk).setMap(null);markerMap.delete(mk);}
+        // 데이터에서 제거
+        const f2=files[fid];
+        if(f2) f2.rows=f2.rows.filter(r=>r._key!==row._key);
+        setDirty(true);
+        renderAll();
+      };
+      // 모바일: 편집 모드일 때만 삭제 버튼 활성화
+      if(isMobile) delBtn.disabled=!editMode;
+      delTd.appendChild(delBtn);
+      tr.appendChild(delTd);
+
+      tr.onclick=ev=>{if(ev.target.tagName==='INPUT'||ev.target.tagName==='BUTTON') return;if(map&&row.geoOk&&row.lat){map.panTo(new kakao.maps.LatLng(row.lat,row.lng));map.setLevel(3);if(window.innerWidth<768) switchTab(0);}};
       tbody.appendChild(tr);
     });
   });
