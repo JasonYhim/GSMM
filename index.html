@@ -1180,7 +1180,9 @@ async function generateReport(){
 
     // ── 7. 다운로드
     prog.textContent='💾 파일 생성 중...';
-    const outBlob = await zip.generateAsync({type:'blob',compression:'DEFLATE'});
+    // ★ hwpx(ODF) 규격: mimetype은 반드시 STORED(무압축)으로 첫 엔트리
+    // JSZip은 파일별 압축 옵션을 지원하지 않으므로 수동 재조립
+    const outBlob = await buildHwpxBlob(zip);
     const outName = `신분당선 지하안전점검 육안조사 실시결과 보고서 (${region} ${fullYear}년).hwpx`;
     const url     = URL.createObjectURL(outBlob);
     const a       = document.createElement('a');
@@ -1295,6 +1297,88 @@ function setCellTexts(trXml, vals){
 
 function str(v){ return v!==null&&v!==undefined ? String(v).trim() : ''; }
 function escapeXml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+/* ★ hwpx(ODF 기반) ZIP 규격 준수 빌더
+ * 1. mimetype은 반드시 첫 번째 엔트리 + STORED(무압축)
+ * 2. version.xml도 STORED
+ * 3. 나머지는 DEFLATE
+ * 4. 원본 ZIP의 엔트리 순서를 보존
+ */
+async function buildHwpxBlob(zip){
+  const allFiles = [];
+  zip.forEach((path, entry)=>{ if(!entry.dir) allFiles.push(path); });
+  const ordered = [];
+  if(allFiles.includes('mimetype')) ordered.push('mimetype');
+  if(allFiles.includes('version.xml')) ordered.push('version.xml');
+  allFiles.forEach(f=>{ if(f!=='mimetype' && f!=='version.xml') ordered.push(f); });
+
+  const parts = [];
+  const centralDir = [];
+  let offset = 0;
+
+  for(const name of ordered){
+    const fileObj = zip.file(name);
+    if(!fileObj) continue;
+    const data = await fileObj.async('uint8array');
+    const isStored = (name==='mimetype' || name==='version.xml');
+    let compData, method;
+    if(isStored){
+      compData = data; method = 0;
+    } else {
+      const cs = new CompressionStream('deflate-raw');
+      const writer = cs.writable.getWriter();
+      writer.write(data); writer.close();
+      const reader = cs.readable.getReader();
+      const chunks = [];
+      while(true){ const {done,value}=await reader.read(); if(done) break; chunks.push(value); }
+      const totalLen = chunks.reduce((s,c)=>s+c.length,0);
+      compData = new Uint8Array(totalLen);
+      let pos=0; for(const c of chunks){ compData.set(c,pos); pos+=c.length; }
+      method = 8;
+    }
+    const nameBytes = new TextEncoder().encode(name);
+    const crc = crc32(data);
+    // Local file header
+    const lfh = new ArrayBuffer(30+nameBytes.length);
+    const lv = new DataView(lfh);
+    lv.setUint32(0,0x04034b50,true); lv.setUint16(4,20,true); lv.setUint16(6,0,true);
+    lv.setUint16(8,method,true); lv.setUint16(10,0,true); lv.setUint16(12,0,true);
+    lv.setUint32(14,crc,true); lv.setUint32(18,compData.length,true);
+    lv.setUint32(22,data.length,true); lv.setUint16(26,nameBytes.length,true);
+    lv.setUint16(28,0,true); new Uint8Array(lfh).set(nameBytes,30);
+    // Central dir entry
+    const cdh = new ArrayBuffer(46+nameBytes.length);
+    const cv = new DataView(cdh);
+    cv.setUint32(0,0x02014b50,true); cv.setUint16(4,20,true); cv.setUint16(6,20,true);
+    cv.setUint16(8,0,true); cv.setUint16(10,method,true); cv.setUint16(12,0,true);
+    cv.setUint16(14,0,true); cv.setUint32(16,crc,true); cv.setUint32(20,compData.length,true);
+    cv.setUint32(24,data.length,true); cv.setUint16(28,nameBytes.length,true);
+    cv.setUint16(30,0,true); cv.setUint16(32,0,true); cv.setUint16(34,0,true);
+    cv.setUint16(36,0,true); cv.setUint32(38,0,true); cv.setUint32(42,offset,true);
+    new Uint8Array(cdh).set(nameBytes,46);
+    parts.push(new Uint8Array(lfh)); parts.push(compData);
+    centralDir.push(new Uint8Array(cdh));
+    offset += lfh.byteLength + compData.length;
+  }
+  const cdOffset = offset;
+  let cdSize=0;
+  centralDir.forEach(c=>{ parts.push(c); cdSize+=c.length; });
+  const eocd = new ArrayBuffer(22);
+  const ev = new DataView(eocd);
+  ev.setUint32(0,0x06054b50,true); ev.setUint16(4,0,true); ev.setUint16(6,0,true);
+  ev.setUint16(8,ordered.length,true); ev.setUint16(10,ordered.length,true);
+  ev.setUint32(12,cdSize,true); ev.setUint32(16,cdOffset,true); ev.setUint16(20,0,true);
+  parts.push(new Uint8Array(eocd));
+  return new Blob(parts,{type:'application/octet-stream'});
+}
+function crc32(buf){
+  let tbl=crc32.table;
+  if(!tbl){ tbl=crc32.table=new Uint32Array(256);
+    for(let i=0;i<256;i++){let c=i;for(let j=0;j<8;j++)c=c&1?0xEDB88320^(c>>>1):c>>>1;tbl[i]=c;}}
+  let crc=0xFFFFFFFF;
+  for(let i=0;i<buf.length;i++) crc=tbl[(crc^buf[i])&0xFF]^(crc>>>8);
+  return (crc^0xFFFFFFFF)>>>0;
+}
 
 /* ── 보고서 모달 열기/닫기 ── */
 function openRptModal(){
