@@ -239,23 +239,17 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
 <div id="rptModal">
   <div class="rpt-box">
     <div class="rpt-title">📄 hwpx 보고서 자동 생성</div>
-    <div class="rpt-sub">GitHub에서 hwpx 양식과 엑셀 파일을 선택하세요</div>
+    <div class="rpt-sub">GitHub에서 엑셀 파일을 선택하면 양식(hwpx)에 자동 입력됩니다</div>
 
     <div class="rpt-row">
-      <div class="rpt-lbl">① hwpx 양식 파일 선택 (GitHub)</div>
-      <select class="rpt-sel" id="rptHwpxSel">
-        <option value="">-- GitHub 목록 로딩 중 --</option>
-      </select>
-    </div>
-
-    <div class="rpt-row">
-      <div class="rpt-lbl">② 엑셀 데이터 파일 선택 (GitHub)</div>
+      <div class="rpt-lbl">엑셀 데이터 파일 선택 (GitHub)</div>
       <select class="rpt-sel" id="rptXlsxSel">
         <option value="">-- GitHub 목록 로딩 중 --</option>
       </select>
     </div>
 
     <div class="rpt-info">
+      ✓ 양식 hwpx는 GitHub에서 자동으로 불러옵니다<br>
       ✓ 표지 지역명 · 날짜 · STA 구간 자동 입력<br>
       ✓ 조사결과 집계 건수 자동 치환<br>
       ✓ 육안조사 결과표 전체 행 자동 채우기<br>
@@ -1045,9 +1039,7 @@ function closeRptModal(){
 }
 
 async function loadGitHubFilesForRpt(){
-  const hwpxSel = document.getElementById('rptHwpxSel');
   const xlsxSel = document.getElementById('rptXlsxSel');
-  hwpxSel.innerHTML = '<option value="">불러오는 중...</option>';
   xlsxSel.innerHTML = '<option value="">불러오는 중...</option>';
 
   try{
@@ -1058,26 +1050,25 @@ async function loadGitHubFilesForRpt(){
     const list = await resp.json();
     if(!Array.isArray(list)) throw new Error('목록 오류');
 
+    // hwpx 양식 파일 URL 자동 저장 (이름에 '양식' 포함된 것 우선, 없으면 첫 hwpx)
     const hwpxFiles = list.filter(f=>f.name.endsWith('.hwpx'));
+    const yangshik = hwpxFiles.find(f=>f.name.includes('양식')) || hwpxFiles[0];
+    window._rptHwpxUrl = yangshik ? yangshik.download_url : '';
+
     const xlsxFiles = list.filter(f=>f.name.endsWith('.xlsx')||f.name.endsWith('.xls'));
-
-    hwpxSel.innerHTML = hwpxFiles.length
-      ? hwpxFiles.map(f=>`<option value="${f.download_url}">${f.name}</option>`).join('')
-      : '<option value="">hwpx 파일 없음</option>';
-
     xlsxSel.innerHTML = xlsxFiles.length
       ? xlsxFiles.map(f=>`<option value="${f.download_url}|${f.name}">${f.name}</option>`).join('')
       : '<option value="">xlsx 파일 없음</option>';
   }catch(e){
-    hwpxSel.innerHTML='<option value="">오류: '+e.message+'</option>';
     xlsxSel.innerHTML='<option value="">오류: '+e.message+'</option>';
   }
 }
 
 async function generateReport(){
-  const hwpxUrl  = document.getElementById('rptHwpxSel').value;
+  const hwpxUrl  = window._rptHwpxUrl || '';
   const xlsxInfo = document.getElementById('rptXlsxSel').value;
-  if(!hwpxUrl||!xlsxInfo){alert('hwpx 양식과 엑셀 파일을 모두 선택하세요.');return;}
+  if(!hwpxUrl){alert('GitHub에서 hwpx 양식 파일을 찾을 수 없습니다.\n저장소에 양식 파일을 업로드해주세요.');return;}
+  if(!xlsxInfo){alert('엑셀 파일을 선택하세요.');return;}
 
   const [xlsxUrl, xlsxName] = xlsxInfo.split('|');
   const prog   = document.getElementById('rptProg');
@@ -1109,11 +1100,18 @@ async function generateReport(){
     if(!ws){throw new Error('V2 또는 RawData 시트를 찾을 수 없습니다.');}
     const allRows = XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
 
-    // V2: 5행=메타, 9행~=데이터 / RawData: 5행=헤더, 6행~=데이터
+    // V2: 5행=메타, 데이터 시작은 순번 1이 있는 행을 자동 감지
     const isV2      = !!wb.Sheets['V2'];
     const metaRow   = isV2 ? (allRows[4]||[]) : (allRows[1]||[]);
-    const dataStart = isV2 ? 8 : 5;    // 0-index
-    const dataRows  = allRows.slice(dataStart).filter(r=>r[0]||r[0]===0).filter(r=>r[0]!=='');
+    // 순번 열(A열)에서 숫자 1이 처음 나오는 행을 데이터 시작으로 감지
+    let dataStart = isV2 ? 8 : 5;
+    for(let ri=0; ri<allRows.length; ri++){
+      const v = allRows[ri][0];
+      if(v===1 || v==='1'){ dataStart=ri; break; }
+    }
+    const dataRows  = allRows.slice(dataStart).filter(r=>{
+      const v=r[0]; return v!==null && v!==undefined && v!=='' && !isNaN(Number(v));
+    });
 
     // 측선별 집계
     const roadCount = {};
@@ -1230,49 +1228,123 @@ function fillResultTable(s1, dataRows, metaRow, isV2, sido, region, period){
   // 메타 행 치환 (광역시도, 시군구, 조사기간 등)
   s1 = s1.replace(/>경기도</g, `>${sido}<`);
   s1 = replaceFirstTextInXml(s1, '용인시', region);
-  if(period) s1 = replaceFirstTextInXml(s1, '2025.03.17.~05.31', period);
+  if(period){
+    // 조사기간 포맷 다양하게 매칭
+    s1 = s1.replace(/(\d{4})[.\-](\d{2})[.\-](\d{2})[.\s~\-]+(\d{2})[.\-](\d{2})/,
+      period.replace(/~/g,'~'));
+    s1 = replaceFirstTextInXml(s1, '2025.03.17.~05.31', period);
+  }
 
-  // 데이터 행: 기존 행(행05~행19=첫페이지15건, 행22~이후=2페이지)에 덮어쓰기
-  // 셀 내 <hp:t> 텍스트를 교체하는 방식
   const trMatches = [...s1.matchAll(/<hp:tr\b[^>]*>.*?<\/hp:tr>/gs)];
+  const totalData = dataRows.length;
 
-  // 첫 데이터 행 인덱스: 행05 (0-index)
-  const firstDataRowIdx = 5;
-  // 2페이지 첫 데이터 행 인덱스: 행22
-  const page2RowIdx = 22;
+  // ★ 양식 구조 분석:
+  // trMatch[0] = 메타헤더1 (광역시도명...)
+  // trMatch[1] = 메타헤더2 (경기도/용인시/신분당선...)
+  // trMatch[2] = 빈 행
+  // trMatch[3] = 결과표 헤더1 (순번/조사측선명...)
+  // trMatch[4] = 결과표 헤더2 (침하/균열/습윤...)
+  // trMatch[5]~[19] = 1페이지 데이터 15행 (순번 1~15)
+  // trMatch[20] = 2페이지 헤더1
+  // trMatch[21] = 2페이지 헤더2
+  // trMatch[22]~[41] = 2페이지 데이터 20행 (순번 16~35)
+
+  // 1페이지: 최대 15행 (trMatch[5]~[19])
+  const PAGE1_START = 5;
+  const PAGE1_ROWS  = 15;
+  // 2페이지~: 각 20행
+  const PAGE2_HDR_START = 20;
+  const PAGE2_DATA_START = 22;
+  const PAGE2_ROWS = 20;
 
   let result = s1;
 
-  dataRows.forEach((row, i)=>{
-    // V2: A=순번, B=측선, C=코드, D=침하, E=균열, F=습윤, G=노후도,
-    //     H=이력, I=침하점, J=균열점, K=습윤점, L=노후점, M=보수, N=평가점, O=등급, P=의견
+  // 2페이지 헤더 XML 저장 (추가 페이지용)
+  const page2Hdr1 = trMatches[PAGE2_HDR_START] ? trMatches[PAGE2_HDR_START][0] : '';
+  const page2Hdr2 = trMatches[PAGE2_HDR_START+1] ? trMatches[PAGE2_HDR_START+1][0] : '';
+  // 템플릿 행 (2페이지 데이터 행 하나)
+  const templateTr = trMatches[PAGE2_DATA_START] ? trMatches[PAGE2_DATA_START][0] : '';
+
+  // 필요한 추가 행 수 계산
+  const existingSlots = PAGE1_ROWS + PAGE2_ROWS; // 35
+  const extraNeeded = Math.max(0, totalData - existingSlots);
+
+  // 추가 행이 필요하면 2페이지 테이블 마지막 </hp:tbl> 앞에 행 삽입
+  if(extraNeeded > 0 && templateTr){
+    // 마지막 기존 tr (trMatch[41]) 뒤에 추가 행 삽입
+    const lastExistingTr = trMatches[41] ? trMatches[41][0] : trMatches[trMatches.length-1][0];
+    let extraRows = '';
+    for(let e=0; e<extraNeeded; e++){
+      // 템플릿 복제 후 rowAddr 업데이트
+      let newTr = templateTr.replace(
+        /rowAddr="\d+"/g, `rowAddr="${PAGE2_ROWS + 2 + e}"`
+      );
+      // 순번 텍스트를 임시로 빈칸으로 (나중에 setCellTexts로 채움)
+      newTr = newTr.replace(
+        /(<hp:tc\b[^>]*>.*?<hp:t[^>]*>)\d+(.*?<\/hp:tc>)/s,
+        '$1 $2'
+      );
+      extraRows += newTr;
+    }
+    result = result.replace(lastExistingTr, lastExistingTr + extraRows);
+
+    // rowCnt 업데이트 (2페이지 테이블)
+    // 원래 rowCnt=22 → 22 + extraNeeded
+    const oldRowCnt = 22;
+    const newRowCnt = oldRowCnt + extraNeeded;
+    // 2페이지 테이블의 rowCnt만 업데이트 (tbl[1])
+    // tbl 헤더에서 두 번째 rowCnt="22" 를 찾아 교체
+    let tblCount = 0;
+    result = result.replace(/(<hp:tbl\b[^>]*\browCnt=")(\d+)(")/g, (m, pre, rc, post)=>{
+      tblCount++;
+      if(tblCount===2 && rc===String(oldRowCnt)){
+        return pre + newRowCnt + post;
+      }
+      return m;
+    });
+  }
+
+  // 다시 tr 매칭 (추가 행 포함)
+  const allTrMatches = [...result.matchAll(/<hp:tr\b[^>]*>.*?<\/hp:tr>/gs)];
+
+  // 데이터 채우기
+  for(let i=0; i<totalData; i++){
+    const row = dataRows[i];
     const vals = [
-      str(row[0]),  // 순번
-      str(row[1]),  // 측선명
-      str(row[2]),  // 손상구간번호
-      str(row[3]),  // 침하
-      str(row[4]),  // 균열
-      str(row[5]),  // 습윤
-      str(row[6]),  // 노후도
-      str(row[7]),  // 이력
-      str(row[8]),  // 침하점
-      str(row[9]),  // 균열점
-      str(row[10]), // 습윤점
-      str(row[11]), // 노후점
-      str(row[12]), // 보수보강
-      str(row[13]), // 평가점수
-      str(row[14]), // 평가등급
-      str(row[15]), // 조사자의견 (0이면 빈칸)
+      str(row[0]),  str(row[1]),  str(row[2]),  str(row[3]),
+      str(row[4]),  str(row[5]),  str(row[6]),  str(row[7]),
+      str(row[8]),  str(row[9]),  str(row[10]), str(row[11]),
+      str(row[12]), str(row[13]), str(row[14]), str(row[15]),
     ];
 
-    // 행 인덱스 결정 (첫 페이지: 0~14 → trIdx 5~19, 2페이지~: 15~→ trIdx 22~)
-    const trIdx = i < 15 ? firstDataRowIdx + i : page2RowIdx + (i - 15);
-    if(trIdx >= trMatches.length) return;
+    // 행 인덱스 결정
+    let trIdx;
+    if(i < PAGE1_ROWS){
+      trIdx = PAGE1_START + i;  // 1페이지: tr[5]~tr[19]
+    } else {
+      trIdx = PAGE2_DATA_START + (i - PAGE1_ROWS);  // 2페이지+: tr[22]~
+    }
+    if(trIdx >= allTrMatches.length) continue;
 
-    const oldTr = trMatches[trIdx][0];
+    const oldTr = allTrMatches[trIdx][0];
     const newTr = setCellTexts(oldTr, vals);
     result = result.replace(oldTr, newTr);
-  });
+  }
+
+  // 데이터보다 행이 많으면 빈 행으로 유지 (기존 순번 숫자 지우기)
+  for(let i=totalData; i<existingSlots; i++){
+    let trIdx;
+    if(i < PAGE1_ROWS){
+      trIdx = PAGE1_START + i;
+    } else {
+      trIdx = PAGE2_DATA_START + (i - PAGE1_ROWS);
+    }
+    if(trIdx >= allTrMatches.length) break;
+    const oldTr = allTrMatches[trIdx][0];
+    const emptyVals = Array(16).fill('');
+    const newTr = setCellTexts(oldTr, emptyVals);
+    result = result.replace(oldTr, newTr);
+  }
 
   return result;
 }
