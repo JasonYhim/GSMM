@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>GSMM 관리자 대시보드</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0e18;--sur:#111827;--s2:#1a2332;--s3:#232f42;
+  --bor:#2a3548;--bor2:#374151;
+  --acc:#00c6ff;--acc2:#0ea5e9;--pur:#7c3aed;--pur2:#a78bfa;
+  --red:#ef4444;--yel:#f59e0b;--grn:#22c55e;--grn2:#4ade80;
+  --txt:#f1f5f9;--sub:#94a3b8;--hint:#64748b;
+  --card-r:10px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden}
+body{font-family:'Pretendard','Noto Sans KR',system-ui,sans-serif;background:var(--bg);color:var(--txt);display:flex;flex-direction:column}
+
+/* ── scrollbar ── */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--bor);border-radius:3px}
+
+/* ── header ── */
+.hdr{flex-shrink:0;padding:10px 20px;background:var(--sur);border-bottom:1px solid var(--bor);
+     display:flex;align-items:center;gap:14px;z-index:100}
+.hdr-icon{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--pur),var(--acc));
+          display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.hdr-title{font-size:15px;font-weight:600;letter-spacing:-.3px}
+.hdr-sub{font-size:11px;color:var(--sub);margin-top:1px}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.hdr-status{font-size:11px;padding:4px 10px;border-radius:20px;display:flex;align-items:center;gap:5px}
+.hdr-status.ok{background:rgba(34,197,94,.12);color:var(--grn2)}
+.hdr-status.err{background:rgba(239,68,68,.12);color:var(--red)}
+.hdr-btn{background:var(--s2);border:1px solid var(--bor);color:var(--sub);font-size:12px;
+         padding:6px 14px;border-radius:7px;cursor:pointer;font-weight:500;transition:.15s}
+.hdr-btn:hover{border-color:var(--acc);color:var(--acc)}
+
+/* ── tabs ── */
+.tabs{flex-shrink:0;display:flex;gap:0;background:var(--sur);border-bottom:1px solid var(--bor);
+      padding:0 20px;overflow-x:auto}
+.tab{padding:10px 18px;font-size:13px;color:var(--hint);cursor:pointer;border-bottom:2px solid transparent;
+     white-space:nowrap;transition:.15s;font-weight:500;display:flex;align-items:center;gap:6px}
+.tab:hover{color:var(--sub)}
+.tab.on{color:var(--acc);border-bottom-color:var(--acc)}
+.tab .ti{font-size:15px}
+
+/* ── main ── */
+.main{flex:1;overflow-y:auto;padding:20px;min-height:0}
+.panel{display:none}
+.panel.on{display:block}
+
+/* ── stat grid ── */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:20px}
+.stat{background:var(--s2);border:1px solid var(--bor);border-radius:var(--card-r);padding:16px 18px;
+      position:relative;overflow:hidden}
+.stat::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.stat.s-blue::before{background:var(--acc)}
+.stat.s-grn::before{background:var(--grn)}
+.stat.s-pur::before{background:var(--pur)}
+.stat.s-yel::before{background:var(--yel)}
+.stat-label{font-size:11px;color:var(--sub);margin-bottom:6px;font-weight:500;letter-spacing:.3px}
+.stat-val{font-size:24px;font-weight:700;letter-spacing:-.5px}
+.stat-note{font-size:10px;color:var(--hint);margin-top:4px}
+
+/* ── card ── */
+.card{background:var(--sur);border:1px solid var(--bor);border-radius:var(--card-r);
+      padding:18px 20px;margin-bottom:16px}
+.card-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px}
+.card-title{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px}
+.card-title .icon{font-size:16px;opacity:.7}
+.badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:600;letter-spacing:.2px}
+.b-ok{background:rgba(34,197,94,.12);color:var(--grn2)}
+.b-warn{background:rgba(245,158,11,.12);color:var(--yel)}
+.b-err{background:rgba(239,68,68,.12);color:var(--red)}
+.b-info{background:rgba(0,198,255,.1);color:var(--acc)}
+.b-ghost{background:var(--s2);color:var(--hint);border:1px solid var(--bor)}
+.b-pur{background:rgba(124,58,237,.12);color:var(--pur2)}
+
+/* ── table ── */
+.tbl-wrap{overflow-x:auto;margin:0 -4px;padding:0 4px}
+table.t{width:100%;border-collapse:collapse;font-size:12px;min-width:600px}
+table.t th{text-align:left;padding:8px 10px;color:var(--sub);font-weight:500;font-size:11px;
+           border-bottom:1px solid var(--bor);position:sticky;top:0;background:var(--sur);z-index:2;
+           letter-spacing:.3px;text-transform:uppercase}
+table.t td{padding:7px 10px;border-bottom:1px solid var(--s2);vertical-align:middle}
+table.t tr:hover td{background:rgba(0,198,255,.03)}
+table.t tr:last-child td{border-bottom:none}
+
+/* file badge */
+.fb{display:inline-flex;align-items:center;gap:3px;font-size:10px;padding:2px 8px;border-radius:12px;font-weight:600}
+.fb.loaded{background:rgba(34,197,94,.12);color:var(--grn2)}
+.fb.unused{background:var(--s3);color:var(--hint)}
+
+/* ── commit list ── */
+.cm{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--s2)}
+.cm:last-child{border-bottom:none}
+.cm-dot{width:8px;height:8px;border-radius:50%;margin-top:6px;flex-shrink:0}
+.cm-msg{font-size:13px;font-weight:500}
+.cm-meta{font-size:11px;color:var(--hint);margin-top:3px;display:flex;gap:8px;flex-wrap:wrap}
+.cm-sha{font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--s2);padding:1px 6px;border-radius:4px;color:var(--sub)}
+
+/* ── chart ── */
+.chart-wrap{background:var(--s2);border-radius:8px;padding:16px;overflow-x:auto}
+.chart-area{display:flex;align-items:flex-end;gap:6px;min-width:620px;height:200px;padding-top:24px}
+.cg{flex:1;text-align:center;min-width:68px}
+.cg-bars{display:flex;gap:2px;align-items:flex-end;justify-content:center;height:170px}
+.cb{border-radius:3px 3px 0 0;min-width:10px;position:relative;transition:opacity .15s}
+.cb:hover{opacity:.8}
+.cb-val{position:absolute;top:-16px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:600;
+        color:var(--sub);white-space:nowrap}
+.cg-lbl{font-size:9px;color:var(--hint);margin-top:6px;line-height:1.4;font-weight:500}
+.chart-legend{display:flex;gap:16px;margin-top:12px;justify-content:center;flex-wrap:wrap}
+.chart-legend-i{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--sub)}
+.chart-legend-d{width:10px;height:10px;border-radius:3px}
+.chart-note{font-size:10px;color:var(--hint);text-align:center;margin-top:6px}
+
+/* ── donut ── */
+.donut-box{display:flex;align-items:center;gap:24px;flex-wrap:wrap}
+.donut-wrap{width:120px;height:120px;position:relative;flex-shrink:0}
+.donut-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.donut-num{font-size:22px;font-weight:700}
+.donut-sub{font-size:10px;color:var(--sub)}
+.donut-legend{font-size:13px}
+.donut-li{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.donut-li .dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+
+/* ── integrity ── */
+.integ-row{padding:6px 0}
+.integ-main{display:flex;justify-content:space-between;align-items:center}
+.integ-reason{font-size:10px;color:var(--hint);margin-top:3px;padding-left:4px;line-height:1.6}
+.integ-reason::before{content:'↳ ';color:var(--yel)}
+.bar-track{height:6px;background:var(--s3);border-radius:3px;overflow:hidden;margin:4px 0 8px}
+.bar-fill{height:100%;border-radius:3px;transition:width .6s}
+
+/* ── report log ── */
+.rpt-fail{font-size:10px;color:var(--hint);padding:4px 0 8px 12px;border-left:2px solid var(--red)}
+
+/* ── settings ── */
+.set-row{display:flex;align-items:center;gap:14px;padding:14px 0;border-bottom:1px solid var(--s2)}
+.set-row:last-child{border-bottom:none}
+.set-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+          font-size:18px;flex-shrink:0}
+.set-info{flex:1;min-width:0}
+.set-name{font-size:13px;font-weight:600}
+.set-detail{font-size:11px;color:var(--hint);margin-top:2px}
+
+/* ── two col ── */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:900px){.grid2{grid-template-columns:1fr}}
+
+/* ── PAT modal ── */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;
+          align-items:center;justify-content:center}
+.modal-bg.show{display:flex}
+.modal{background:var(--sur);border:1px solid var(--pur);border-radius:12px;padding:24px;
+       width:min(420px,92vw)}
+.modal h2{font-size:15px;font-weight:600;color:var(--pur2);margin-bottom:4px}
+.modal p{font-size:11px;color:var(--sub);line-height:1.7;margin-bottom:14px}
+.modal input{width:100%;background:var(--s2);border:1px solid var(--bor);border-radius:7px;
+             padding:10px 12px;color:var(--txt);font-size:13px;outline:none;margin-bottom:12px}
+.modal input:focus{border-color:var(--pur)}
+.modal-btns{display:flex;gap:8px;justify-content:flex-end}
+.modal-btns button{padding:8px 18px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;border:none}
+
+/* ── loading ── */
+.loading{text-align:center;padding:40px;color:var(--sub);font-size:13px}
+.spin{display:inline-block;width:20px;height:20px;border:2px solid var(--bor);border-top-color:var(--acc);
+      border-radius:50%;animation:sp .6s linear infinite;margin-right:8px;vertical-align:middle}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* ── empty state ── */
+.empty{text-align:center;padding:32px;color:var(--hint);font-size:13px}
+
+/* ── mobile ── */
+@media(max-width:767px){
+  .hdr{padding:8px 12px;gap:10px}
+  .hdr-title{font-size:13px}
+  .tabs{padding:0 10px}
+  .tab{padding:8px 12px;font-size:12px}
+  .main{padding:12px}
+  .stats{grid-template-columns:repeat(2,1fr);gap:8px}
+  .stat{padding:12px}
+  .stat-val{font-size:20px}
+  .card{padding:14px}
+  .grid2{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- PAT 모달 -->
+<div class="modal-bg" id="patModal">
+  <div class="modal">
+    <h2>🔑 GitHub PAT 설정</h2>
+    <p>관리자 대시보드는 GitHub API를 사용합니다.<br>
+    인증 없이 시간당 60회, PAT 입력 시 5,000회까지 호출 가능합니다.<br>
+    <b>Settings → Developer settings → Personal access tokens</b></p>
+    <input type="password" id="patInput" placeholder="github_pat_... 또는 ghp_...">
+    <div style="font-size:10px;color:var(--hint);margin-bottom:12px">
+      ※ 이 브라우저의 localStorage에만 저장됩니다
+    </div>
+    <div class="modal-btns">
+      <button style="background:var(--s2);color:var(--sub)" onclick="closePatModal()">취소</button>
+      <button style="background:var(--pur);color:#fff" onclick="savePat()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- Header -->
+<div class="hdr">
+  <div class="hdr-icon">🛡</div>
+  <div>
+    <div class="hdr-title">GSMM 관리자 대시보드</div>
+    <div class="hdr-sub">JasonYhim/GSMM · <span id="hdrBranch">main</span></div>
+  </div>
+  <div class="hdr-right">
+    <div class="hdr-status ok" id="hdrApiStatus">
+      <span class="spin" style="width:12px;height:12px;border-width:1.5px;margin:0"></span>
+      <span id="hdrApiText">확인 중...</span>
+    </div>
+    <button class="hdr-btn" onclick="openPatModal()">🔑 PAT</button>
+    <button class="hdr-btn" onclick="refreshAll()">🔄 새로고침</button>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+  <div class="tab on" data-tab="overview"><span class="ti">📊</span> 개요</div>
+  <div class="tab" data-tab="files"><span class="ti">📁</span> 파일 현황</div>
+  <div class="tab" data-tab="commits"><span class="ti">📝</span> 커밋 이력</div>
+  <div class="tab" data-tab="analysis"><span class="ti">📈</span> 데이터 분석</div>
+  <div class="tab" data-tab="reports"><span class="ti">📄</span> 보고서 이력</div>
+  <div class="tab" data-tab="settings"><span class="ti">⚙</span> 설정</div>
+</div>
+
+<!-- Main content -->
+<div class="main" id="mainScroll">
+
+  <!-- ═══ 개요 ═══ -->
+  <div class="panel on" id="p-overview">
+    <div class="stats" id="overviewStats">
+      <div class="stat s-blue"><div class="stat-label">📁 전체 파일</div><div class="stat-val" id="sFiles">-</div><div class="stat-note" id="sFilesNote">로딩 중...</div></div>
+      <div class="stat s-pur"><div class="stat-label">📝 총 커밋</div><div class="stat-val" id="sCommits">-</div><div class="stat-note" id="sCommitsNote">로딩 중...</div></div>
+      <div class="stat s-grn"><div class="stat-label">💾 저장소 용량</div><div class="stat-val" id="sSize">-</div><div class="stat-note" id="sSizeNote">로딩 중...</div></div>
+      <div class="stat s-yel"><div class="stat-label">🔑 PAT 상태</div><div class="stat-val" id="sPat">-</div><div class="stat-note" id="sPatNote">-</div></div>
+    </div>
+
+    <div class="grid2">
+      <!-- 최근 파일 -->
+      <div class="card">
+        <div class="card-hdr"><div class="card-title"><span class="icon">📁</span> 최근 수정 파일</div></div>
+        <div id="ovFiles"><div class="loading"><span class="spin"></span>불러오는 중...</div></div>
+      </div>
+      <!-- 최근 커밋 -->
+      <div class="card">
+        <div class="card-hdr"><div class="card-title"><span class="icon">📝</span> 최근 커밋</div></div>
+        <div id="ovCommits"><div class="loading"><span class="spin"></span>불러오는 중...</div></div>
+      </div>
+    </div>
+
+    <!-- 차트 미리보기 -->
+    <div class="card">
+      <div class="card-hdr"><div class="card-title"><span class="icon">📈</span> 조사 데이터 현황 (권역별)</div>
+        <span class="badge b-info" id="ovChartBadge">로딩 중</span></div>
+      <div id="ovChart"><div class="loading"><span class="spin"></span>엑셀 파일 분석 중...</div></div>
+    </div>
+  </div>
+
+  <!-- ═══ 파일 현황 ═══ -->
+  <div class="panel" id="p-files">
+    <div class="card">
+      <div class="card-hdr">
+        <div class="card-title"><span class="icon">📁</span> GitHub 저장소 파일 전체 목록</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span class="fb loaded">● 현시 중</span>
+          <span class="fb unused">○ 미사용</span>
+          <span style="font-size:10px;color:var(--hint)">= GSMM 지도 로드 여부</span>
+        </div>
+      </div>
+      <div id="fileTable"><div class="loading"><span class="spin"></span>불러오는 중...</div></div>
+    </div>
+  </div>
+
+  <!-- ═══ 커밋 이력 ═══ -->
+  <div class="panel" id="p-commits">
+    <div class="card">
+      <div class="card-hdr"><div class="card-title"><span class="icon">📝</span> 커밋 히스토리</div>
+        <span class="badge b-info" id="commitCountBadge">-</span></div>
+      <div id="commitList"><div class="loading"><span class="spin"></span>불러오는 중...</div></div>
+    </div>
+  </div>
+
+  <!-- ═══ 데이터 분석 ═══ -->
+  <div class="panel" id="p-analysis">
+    <div class="card">
+      <div class="card-hdr"><div class="card-title"><span class="icon">📊</span> 과년도 대비 조사 데이터 현황</div>
+        <span class="badge b-info" id="analysisChartBadge">로딩 중</span></div>
+      <div id="analysisChart"><div class="loading"><span class="spin"></span>엑셀 파일 분석 중...</div></div>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <div class="card-hdr"><div class="card-title"><span class="icon">🎯</span> 평가등급 분포</div></div>
+        <div id="gradeChart"><div class="loading"><span class="spin"></span>분석 중...</div></div>
+      </div>
+      <div class="card">
+        <div class="card-hdr"><div class="card-title"><span class="icon">🛡</span> 파일 무결성 체크</div>
+          <span class="badge b-ok" id="integBadge">-</span></div>
+        <div id="integCheck"><div class="loading"><span class="spin"></span>검증 중...</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ 보고서 이력 ═══ -->
+  <div class="panel" id="p-reports">
+    <div class="card">
+      <div class="card-hdr"><div class="card-title"><span class="icon">📄</span> 보고서 생성 이력</div>
+        <span class="badge b-pur" id="rptBadge">-</span></div>
+      <div style="font-size:11px;color:var(--hint);margin-bottom:12px">
+        ※ 보고서 생성 이력은 이 브라우저의 localStorage에 기록됩니다. GSMM 본체에서 보고서를 생성하면 자동 기록됩니다.
+      </div>
+      <div id="reportList"></div>
+    </div>
+  </div>
+
+  <!-- ═══ 설정 ═══ -->
+  <div class="panel" id="p-settings">
+    <div class="card">
+      <div class="card-hdr"><div class="card-title"><span class="icon">⚙</span> 시스템 설정 상태</div></div>
+      <div id="settingsArea"><div class="loading"><span class="spin"></span>확인 중...</div></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ═══════════════════════════════════
+   GSMM 관리자 대시보드 — 메인 스크립트
+═══════════════════════════════════ */
+
+const GH_OWNER='JasonYhim', GH_REPO='GSMM', GH_BRANCH='main';
+
+// 8개 권역 정의
+const REGIONS=[
+  {operator:'신분당',region:'강남구',color:'#7F77DD',light:'#AFA9EC',lighter:'#CECBF6'},
+  {operator:'신분당',region:'서초구',color:'#7F77DD',light:'#AFA9EC',lighter:'#CECBF6'},
+  {operator:'신분당',region:'성남시',color:'#7F77DD',light:'#AFA9EC',lighter:'#CECBF6'},
+  {operator:'경기철도',region:'성남시',color:'#1D9E75',light:'#5DCAA5',lighter:'#9FE1CB'},
+  {operator:'경기철도',region:'용인시',color:'#1D9E75',light:'#5DCAA5',lighter:'#9FE1CB'},
+  {operator:'경기철도',region:'수원시',color:'#1D9E75',light:'#5DCAA5',lighter:'#9FE1CB'},
+  {operator:'새서울철도',region:'강남구',color:'#D85A30',light:'#F0997B',lighter:'#F5C4B3'},
+  {operator:'새서울철도',region:'서초구',color:'#D85A30',light:'#F0997B',lighter:'#F5C4B3'}
+];
+
+// GSMM에서 활발히 사용하는 파일 패턴 (현시 중 판별)
+function isActiveFile(name){
+  return /^\d{2}-[가-힣]+-[가-힣]+.*\.xlsx$/i.test(name);
+}
+
+/* ── PAT 관리 ── */
+function getPat(){return localStorage.getItem('gh_pat')||'';}
+function openPatModal(){
+  document.getElementById('patInput').value=getPat();
+  document.getElementById('patModal').classList.add('show');
+}
+function closePatModal(){document.getElementById('patModal').classList.remove('show');}
+function savePat(){
+  const v=document.getElementById('patInput').value.replace(/[\r\n\t\u00a0\u200b\ufeff]/g,'').trim();
+  if(v) localStorage.setItem('gh_pat',v);
+  else localStorage.removeItem('gh_pat');
+  closePatModal();
+  refreshAll();
+}
+
+/* ── GitHub API 래퍼 ── */
+async function ghFetch(path,opts={}){
+  const pat=getPat();
+  const headers={'Accept':'application/vnd.github.v3+json'};
+  if(pat){
+    headers['Authorization']=(pat.startsWith('github_pat_')?'Bearer':'token')+' '+pat;
+  }
+  const url='https://api.github.com'+path;
+  try{
+    let resp=await fetch(url,{headers,...opts});
+    // PAT 인증 실패 시 인증 없이 재시도
+    if(pat&&(resp.status===401||resp.status===403)){
+      console.warn('PAT 인증 실패, 인증 없이 재시도:',resp.status);
+      resp=await fetch(url,{headers:{'Accept':'application/vnd.github.v3+json'},...opts});
+    }
+    return resp;
+  }catch(e){
+    // PAT 포함 요청이 CORS 에러 등으로 실패 시 인증 없이 재시도
+    if(pat){
+      console.warn('인증 요청 실패, 인증 없이 재시도:',e.message);
+      return await fetch(url,{headers:{'Accept':'application/vnd.github.v3+json'},...opts});
+    }
+    throw e;
+  }
+}
+async function ghJson(path){
+  const r=await ghFetch(path);
+  if(!r.ok){
+    const body=await r.text().catch(()=>'');
+    throw new Error(`API ${r.status}: ${r.statusText} ${body.substring(0,200)}`);
+  }
+  return{data:await r.json(),headers:r.headers};
+}
+
+/* ── Tab 전환 ── */
+document.querySelectorAll('.tab').forEach(tab=>{
+  tab.onclick=()=>{
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('on'));
+    tab.classList.add('on');
+    document.getElementById('p-'+tab.dataset.tab).classList.add('on');
+    document.getElementById('mainScroll').scrollTop=0;
+  };
+});
+
+/* ═══ 데이터 저장소 ═══ */
+let ghFiles=[];       // GitHub 파일 목록
+let ghCommits=[];     // 커밋 목록
+let ghRepoInfo=null;  // 리포 정보
+let xlsxData={};      // {파일명: {year,operator,region,rowCount,grades,integ}}
+let rateLimit={remaining:'-',limit:'-',reset:null};
+
+/* ═══ 전체 새로고침 ═══ */
+async function refreshAll(){
+  updatePatUI();
+  try{
+    await Promise.allSettled([
+      loadFiles(),
+      loadCommits(),
+      loadRepoInfo()
+    ]);
+  }catch(e){console.error('API 로드 오류:',e);}
+  updateApiStatus();
+  try{
+    await analyzeExcelFiles();
+  }catch(e){console.error('엑셀 분석 오류:',e);}
+  try{renderOverview();}catch(e){console.error('개요 렌더 오류:',e);}
+  try{renderFilesTab();}catch(e){console.error('파일탭 렌더 오류:',e);}
+  try{renderCommitsTab();}catch(e){console.error('커밋탭 렌더 오류:',e);}
+  try{renderAnalysis();}catch(e){console.error('분석탭 렌더 오류:',e);}
+  try{renderReports();}catch(e){console.error('보고서탭 렌더 오류:',e);}
+  try{renderSettings();}catch(e){console.error('설정탭 렌더 오류:',e);}
+}
+
+/* ── API 상태 표시 ── */
+function updateApiStatus(){
+  const el=document.getElementById('hdrApiStatus');
+  const txt=document.getElementById('hdrApiText');
+  const pat=getPat();
+  if(pat){
+    el.className='hdr-status ok';
+    txt.textContent=`API ${rateLimit.remaining}/${rateLimit.limit}`;
+  } else {
+    el.className='hdr-status err';
+    txt.textContent='PAT 미설정 (60/h)';
+  }
+}
+function updatePatUI(){
+  const pat=getPat();
+  const el=document.getElementById('sPat');
+  const note=document.getElementById('sPatNote');
+  if(pat){
+    el.textContent='유효';
+    el.style.color='var(--grn2)';
+    note.textContent=pat.substring(0,15)+'...';
+  } else {
+    el.textContent='미설정';
+    el.style.color='var(--yel)';
+    note.textContent='시간당 60회 제한';
+  }
+}
+
+/* ═══ 파일 목록 로드 ═══ */
+async function loadFiles(){
+  try{
+    const{data,headers}=await ghJson(`/repos/${GH_OWNER}/${GH_REPO}/contents/?ref=${GH_BRANCH}`);
+    ghFiles=Array.isArray(data)?data:[];
+    updateRateLimit(headers);
+  }catch(e){
+    ghFiles=[];
+    console.error('파일 로드 실패:',e);
+    document.getElementById('ovFiles').innerHTML='<div class="empty" style="color:var(--red)">파일 로드 실패: '+esc(e.message)+'</div>';
+  }
+}
+
+/* ═══ 커밋 로드 ═══ */
+async function loadCommits(){
+  try{
+    const{data,headers}=await ghJson(`/repos/${GH_OWNER}/${GH_REPO}/commits?sha=${GH_BRANCH}&per_page=30`);
+    ghCommits=Array.isArray(data)?data:[];
+    updateRateLimit(headers);
+  }catch(e){
+    ghCommits=[];
+    console.error('커밋 로드 실패:',e);
+    document.getElementById('ovCommits').innerHTML='<div class="empty" style="color:var(--red)">커밋 로드 실패: '+esc(e.message)+'</div>';
+  }
+}
+
+/* ═══ 리포 정보 ═══ */
+async function loadRepoInfo(){
+  try{
+    const{data,headers}=await ghJson(`/repos/${GH_OWNER}/${GH_REPO}`);
+    ghRepoInfo=data;
+    updateRateLimit(headers);
+  }catch(e){
+    ghRepoInfo=null;
+    console.error('리포 정보 실패:',e);
+  }
+}
+
+function updateRateLimit(headers){
+  if(!headers) return;
+  const rem=headers.get('x-ratelimit-remaining');
+  const lim=headers.get('x-ratelimit-limit');
+  const rst=headers.get('x-ratelimit-reset');
+  if(rem!==null) rateLimit.remaining=rem;
+  if(lim!==null) rateLimit.limit=lim;
+  if(rst!==null) rateLimit.reset=new Date(parseInt(rst)*1000);
+}
+
+/* ═══ 엑셀 파일 분석 ═══ */
+async function analyzeExcelFiles(){
+  xlsxData={};
+  const xlsxFiles=ghFiles.filter(f=>f.name.endsWith('.xlsx')||f.name.endsWith('.xls'));
+  for(const file of xlsxFiles){
+    try{
+      const parsed=parseFileName(file.name);
+      if(!parsed) continue;
+
+      // 엑셀 다운로드 및 파싱 (raw.githubusercontent.com 사용)
+      const rawUrl=`https://raw.githubusercontent.com/${GH_OWNER}/${GH_REPO}/${GH_BRANCH}/${encodeURIComponent(file.name)}`;
+      const resp=await fetch(rawUrl);
+      if(!resp.ok) throw new Error('다운로드 실패: '+resp.status);
+      const buf=await resp.arrayBuffer();
+      const wb=XLSX.read(new Uint8Array(buf),{type:'array'});
+
+      // RawData 시트 확인
+      const hasRaw=!!wb.Sheets['RawData'];
+      const hasV2=!!wb.Sheets['V2'];
+      const sheet=wb.Sheets['RawData']||wb.Sheets[wb.SheetNames[0]];
+      const rows=sheet?XLSX.utils.sheet_to_json(sheet,{header:1,defval:''}):[];
+
+      // 데이터 행 수 (6행부터)
+      let dataCount=0;
+      const grades={일반:0,우선:0,긴급:0};
+      let emptyAddr=0;
+      let colCount=0;
+
+      if(rows.length>3){
+        const headerRow=rows[3]||[];
+        colCount=headerRow.filter(c=>c!=='').length;
+      }
+
+      for(let i=5;i<rows.length;i++){
+        const r=rows[i];
+        if(!r[0]&&r[0]!==0) continue;
+        dataCount++;
+        const g=String(r[14]||'일반').trim();
+        if(grades[g]!==undefined) grades[g]++;
+        else grades['일반']++;
+        if(!String(r[16]||'').trim()) emptyAddr++;
+      }
+
+      xlsxData[file.name]={
+        year:parsed.year,
+        operator:parsed.operator,
+        region:parsed.region,
+        rowCount:dataCount,
+        grades,
+        integ:{
+          hasRaw,
+          hasV2,
+          colCount,
+          emptyAddr,
+          dataCount,
+          addrRate:dataCount>0?Math.round((dataCount-emptyAddr)/dataCount*100):100,
+          colOk:colCount>=20
+        }
+      };
+    }catch(e){
+      console.warn('엑셀 분석 실패:',file.name,e);
+    }
+  }
+}
+
+function parseFileName(name){
+  const base=name.replace(/\.xlsx?$/i,'').replace(/-보고서$/,'');
+  const parts=base.split('-');
+  if(parts.length<3) return null;
+  const year=parts[0];
+  if(!/^\d{2}$/.test(year)) return null;
+  return{year:'20'+year,operator:parts[1],region:parts[2]};
+}
+
+/* ═══════════════════════════════
+   렌더링 함수들
+═══════════════════════════════ */
+
+/* ── 개요 탭 ── */
+function renderOverview(){
+  // 통계 카드
+  const xlsx=ghFiles.filter(f=>f.name.endsWith('.xlsx')||f.name.endsWith('.xls'));
+  const hwpx=ghFiles.filter(f=>f.name.endsWith('.hwpx'));
+  const other=ghFiles.length-xlsx.length-hwpx.length;
+  document.getElementById('sFiles').textContent=ghFiles.length;
+  document.getElementById('sFilesNote').textContent=`xlsx ${xlsx.length} · hwpx ${hwpx.length} · 기타 ${other}`;
+
+  document.getElementById('sCommits').textContent=ghCommits.length>=30?'30+':ghCommits.length;
+  const recent7=ghCommits.filter(c=>{
+    const d=new Date(c.commit.author.date);
+    return(Date.now()-d.getTime())<7*86400000;
+  }).length;
+  document.getElementById('sCommitsNote').textContent=`최근 7일: ${recent7}건`;
+
+  if(ghRepoInfo){
+    const kb=ghRepoInfo.size||0;
+    document.getElementById('sSize').textContent=kb>1024?(kb/1024).toFixed(1)+' MB':kb+' KB';
+    document.getElementById('sSizeNote').textContent=`한도 1GB 중 ${(kb/1024/1024*100).toFixed(1)}%`;
+  }
+
+  // 최근 파일
+  const sortedFiles=[...ghFiles].sort((a,b)=>(b.size||0)-(a.size||0)).slice(0,5);
+  let fhtml='<table class="t"><thead><tr><th>파일명</th><th>크기</th></tr></thead><tbody>';
+  sortedFiles.forEach(f=>{
+    const sz=f.size>1024?(f.size/1024).toFixed(0)+' KB':f.size+' B';
+    fhtml+=`<tr><td style="font-size:12px">${esc(f.name)}</td><td>${sz}</td></tr>`;
+  });
+  fhtml+='</tbody></table>';
+  document.getElementById('ovFiles').innerHTML=fhtml;
+
+  // 최근 커밋
+  let chtml='';
+  ghCommits.slice(0,4).forEach(c=>{
+    const msg=c.commit.message.split('\n')[0];
+    const date=timeAgo(new Date(c.commit.author.date));
+    const author=c.commit.author.name||'unknown';
+    const sha=c.sha.substring(0,7);
+    const dotColor=msg.includes('삭제')?'var(--red)':msg.includes('업데이트')?'var(--grn2)':'var(--acc)';
+    chtml+=`<div class="cm"><div class="cm-dot" style="background:${dotColor}"></div><div style="flex:1"><div class="cm-msg">${esc(msg)}</div><div class="cm-meta"><span>${esc(author)}</span><span>${date}</span><span class="cm-sha">${sha}</span></div></div></div>`;
+  });
+  document.getElementById('ovCommits').innerHTML=chtml||'<div class="empty">커밋 없음</div>';
+
+  // 차트 미리보기
+  renderBarChart('ovChart','ovChartBadge');
+}
+
+/* ── 파일 현황 탭 ── */
+function renderFilesTab(){
+  let html='<div class="tbl-wrap"><table class="t"><thead><tr><th>파일명</th><th style="width:70px">GSMM</th><th style="width:60px">크기</th><th style="width:80px">수정자</th><th style="width:65px">무결성</th></tr></thead><tbody>';
+
+  // 파일별 최근 커밋 정보 매핑
+  const fileCommitMap={};
+  ghCommits.forEach(c=>{
+    const msg=c.commit.message;
+    // "데이터 업데이트 - 파일명.xlsx" 패턴에서 파일명 추출
+    const m=msg.match(/[-–]\s*(.+\.xlsx)/i);
+    if(m&&!fileCommitMap[m[1]]){
+      fileCommitMap[m[1]]={author:c.commit.author.name,date:c.commit.author.date};
+    }
+  });
+
+  const sorted=[...ghFiles].sort((a,b)=>{
+    const aAct=isActiveFile(a.name)?0:1;
+    const bAct=isActiveFile(b.name)?0:1;
+    if(aAct!==bAct) return aAct-bAct;
+    return a.name.localeCompare(b.name);
+  });
+
+  sorted.forEach(f=>{
+    const sz=f.size>1024?(f.size/1024).toFixed(0)+' KB':f.size+' B';
+    const active=isActiveFile(f.name);
+    const gsmmBadge=active
+      ?'<span class="fb loaded">● 현시 중</span>'
+      :'<span class="fb unused">○ 미사용</span>';
+
+    let integBadge='<span class="badge b-ghost">-</span>';
+    const xd=xlsxData[f.name];
+    if(xd){
+      if(!xd.integ.hasRaw) integBadge='<span class="badge b-err">시트 없음</span>';
+      else if(xd.integ.addrRate<90) integBadge='<span class="badge b-warn">주소 '+xd.integ.addrRate+'%</span>';
+      else integBadge='<span class="badge b-ok">정상</span>';
+    }
+
+    const ci=fileCommitMap[f.name];
+    const author=ci?ci.author:'—';
+
+    html+=`<tr><td style="font-size:12px">${esc(f.name)}</td><td>${gsmmBadge}</td><td>${sz}</td><td style="font-size:11px;color:var(--sub)">${esc(author)}</td><td>${integBadge}</td></tr>`;
+  });
+
+  html+='</tbody></table></div>';
+  document.getElementById('fileTable').innerHTML=html;
+}
+
+/* ── 커밋 이력 탭 ── */
+function renderCommitsTab(){
+  document.getElementById('commitCountBadge').textContent=ghCommits.length+'건';
+  let html='';
+  ghCommits.forEach(c=>{
+    const msg=c.commit.message.split('\n')[0];
+    const body=c.commit.message.split('\n').slice(1).join(' ').trim();
+    const date=new Date(c.commit.author.date);
+    const dateStr=date.toLocaleDateString('ko-KR',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+    const author=c.commit.author.name||'unknown';
+    const sha=c.sha.substring(0,7);
+    const dotColor=msg.includes('삭제')?'var(--red)':msg.includes('업데이트')||msg.includes('추가')?'var(--grn2)':msg.includes('수정')?'var(--acc)':'var(--sub)';
+
+    html+=`<div class="cm"><div class="cm-dot" style="background:${dotColor}"></div><div style="flex:1"><div class="cm-msg">${esc(msg)}</div><div class="cm-meta"><span>${esc(author)}</span><span>${dateStr}</span><span class="cm-sha">${sha}</span></div>${body?'<div style="font-size:10px;color:var(--hint);margin-top:2px">'+esc(body)+'</div>':''}</div></div>`;
+  });
+  document.getElementById('commitList').innerHTML=html||'<div class="empty">커밋 이력 없음</div>';
+}
+
+/* ── 데이터 분석 탭 ── */
+function renderAnalysis(){
+  renderBarChart('analysisChart','analysisChartBadge');
+  renderGradeDonut();
+  renderIntegrity();
+}
+
+/* ── 막대 차트 (8개 권역) ── */
+function renderBarChart(containerId,badgeId){
+  // 연도별 데이터 수집
+  const yearSet=new Set();
+  Object.values(xlsxData).forEach(d=>yearSet.add(d.year));
+  const years=[...yearSet].sort();
+
+  if(years.length===0){
+    document.getElementById(containerId).innerHTML='<div class="empty">분석 가능한 엑셀 파일이 없습니다</div>';
+    document.getElementById(badgeId).textContent='데이터 없음';
+    return;
+  }
+
+  document.getElementById(badgeId).textContent=`${REGIONS.length}개 권역 · ${years.length}개년`;
+
+  // 색상 팔레트 (연도별 밝기 변화)
+  function getBarColor(region,yearIdx,totalYears){
+    const r=REGIONS.find(rg=>rg.operator===region.operator&&rg.region===region.region);
+    if(!r) return'var(--sub)';
+    if(totalYears===1) return r.color;
+    if(totalYears===2) return yearIdx===0?r.light:r.color;
+    if(yearIdx===0) return r.lighter;
+    if(yearIdx===totalYears-1) return r.color;
+    return r.light;
+  }
+
+  const maxVal=Math.max(1,...Object.values(xlsxData).map(d=>d.rowCount));
+  const maxH=150;
+
+  let html='<div class="chart-wrap"><div class="chart-area">';
+  REGIONS.forEach(rg=>{
+    html+='<div class="cg"><div class="cg-bars">';
+    years.forEach((yr,yi)=>{
+      // 해당 권역+연도 파일 찾기
+      const key=Object.keys(xlsxData).find(k=>{
+        const d=xlsxData[k];
+        return d.operator===rg.operator&&d.region===rg.region&&d.year===yr;
+      });
+      const count=key?xlsxData[key].rowCount:0;
+      const h=count>0?Math.max(8,Math.round(count/maxVal*maxH)):0;
+      const color=getBarColor(rg,yi,years.length);
+      if(count>0){
+        html+=`<div class="cb" style="height:${h}px;background:${color};width:${Math.max(10,Math.floor(50/years.length))}px" title="${yr}: ${count}건"><span class="cb-val">${count}</span></div>`;
+      }
+    });
+    html+=`</div><div class="cg-lbl">${rg.operator.replace('철도','').replace('새서울','새서울')}<br>${rg.region}</div></div>`;
+  });
+  html+='</div>';
+
+  // 범례
+  html+='<div class="chart-legend">';
+  years.forEach((yr,i)=>{
+    const sampleRg=REGIONS[0];
+    const color=getBarColor(sampleRg,i,years.length);
+    html+=`<div class="chart-legend-i"><div class="chart-legend-d" style="background:${color}"></div>${yr}</div>`;
+  });
+  html+='</div>';
+  html+='<div class="chart-note">* 색상 계열: 보라=신분당 / 청록=경기철도 / 코랄=새서울철도</div>';
+  html+='</div>';
+
+  document.getElementById(containerId).innerHTML=html;
+}
+
+/* ── 평가등급 도넛 ── */
+function renderGradeDonut(){
+  let total=0, g={일반:0,우선:0,긴급:0};
+  Object.values(xlsxData).forEach(d=>{
+    total+=d.rowCount;
+    g['일반']+=d.grades['일반']||0;
+    g['우선']+=d.grades['우선']||0;
+    g['긴급']+=d.grades['긴급']||0;
+  });
+
+  if(total===0){
+    document.getElementById('gradeChart').innerHTML='<div class="empty">데이터 없음</div>';
+    return;
+  }
+
+  const pct=k=>total>0?Math.round(g[k]/total*100):0;
+  const circumference=2*Math.PI*14;
+  const seg1=g['일반']/total*circumference;
+  const seg2=g['우선']/total*circumference;
+  const seg3=g['긴급']/total*circumference;
+
+  let html=`<div class="donut-box">
+    <div class="donut-wrap">
+      <svg viewBox="0 0 36 36" style="transform:rotate(-90deg)">
+        <circle cx="18" cy="18" r="14" fill="none" stroke="var(--s3)" stroke-width="4"/>
+        <circle cx="18" cy="18" r="14" fill="none" stroke="#4ade80" stroke-width="4" stroke-dasharray="${seg1} ${circumference}" stroke-dashoffset="0"/>
+        <circle cx="18" cy="18" r="14" fill="none" stroke="#60a5fa" stroke-width="4" stroke-dasharray="${seg2} ${circumference}" stroke-dashoffset="${-seg1}"/>
+        <circle cx="18" cy="18" r="14" fill="none" stroke="#f87171" stroke-width="4" stroke-dasharray="${seg3} ${circumference}" stroke-dashoffset="${-(seg1+seg2)}"/>
+      </svg>
+      <div class="donut-center"><div class="donut-num">${total}</div><div class="donut-sub">총 건수</div></div>
+    </div>
+    <div class="donut-legend">
+      <div class="donut-li"><div class="dot" style="background:#4ade80"></div> 일반 — ${g['일반']}건 (${pct('일반')}%)</div>
+      <div class="donut-li"><div class="dot" style="background:#60a5fa"></div> 우선 — ${g['우선']}건 (${pct('우선')}%)</div>
+      <div class="donut-li"><div class="dot" style="background:#f87171"></div> 긴급 — ${g['긴급']}건 (${pct('긴급')}%)</div>
+    </div>
+  </div>`;
+  document.getElementById('gradeChart').innerHTML=html;
+}
+
+/* ── 무결성 체크 ── */
+function renderIntegrity(){
+  const entries=Object.entries(xlsxData);
+  if(entries.length===0){
+    document.getElementById('integCheck').innerHTML='<div class="empty">검증 대상 없음</div>';
+    document.getElementById('integBadge').textContent='-';
+    return;
+  }
+
+  let passCount=0;
+  const issues=[];
+
+  entries.forEach(([name,d])=>{
+    let fileOk=true;
+    if(!d.integ.hasRaw){
+      issues.push({name,type:'err',msg:'RawData 시트가 존재하지 않습니다'});
+      fileOk=false;
+    }
+    if(!d.integ.hasV2){
+      issues.push({name,type:'warn',msg:'V2 시트 없음 — 보고서 자동 생성 불가'});
+    }
+    if(!d.integ.colOk){
+      issues.push({name,type:'warn',msg:`필수 컬럼 부족 (${d.integ.colCount}/20열)`});
+      fileOk=false;
+    }
+    if(d.integ.addrRate<90){
+      issues.push({name,type:'warn',msg:`주소 필드 비공란율 ${d.integ.addrRate}% — ${d.integ.emptyAddr}건 누락`});
+    }
+    if(d.integ.dataCount===0){
+      issues.push({name,type:'err',msg:'데이터 행이 0건입니다'});
+      fileOk=false;
+    }
+    if(fileOk) passCount++;
+  });
+
+  const rate=Math.round(passCount/entries.length*100);
+  document.getElementById('integBadge').textContent=`통과 ${passCount}/${entries.length}`;
+  document.getElementById('integBadge').className='badge '+(rate>=90?'b-ok':rate>=70?'b-warn':'b-err');
+
+  let html=`<div style="margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+      <span style="color:var(--sub)">무결성 검증률</span><span style="font-weight:600">${rate}%</span>
+    </div>
+    <div class="bar-track"><div class="bar-fill" style="width:${rate}%;background:${rate>=90?'var(--grn)':rate>=70?'var(--yel)':'var(--red)'}"></div></div>
+  </div>`;
+
+  // 항목별 표시
+  const checks=[
+    {label:'RawData 시트 존재',ok:!issues.some(i=>i.msg.includes('RawData'))},
+    {label:'필수 컬럼 검증 (20열)',ok:!issues.some(i=>i.msg.includes('필수 컬럼'))},
+    {label:'데이터 행 수 > 0',ok:!issues.some(i=>i.msg.includes('0건'))},
+    {label:'주소 필드 비공란율',ok:!issues.some(i=>i.msg.includes('주소 필드'))},
+    {label:'V2 시트 존재 (보고서용)',ok:!issues.some(i=>i.msg.includes('V2 시트'))},
+  ];
+
+  checks.forEach(ck=>{
+    const relIssues=issues.filter(i=>{
+      if(ck.label.includes('RawData')&&i.msg.includes('RawData')) return true;
+      if(ck.label.includes('컬럼')&&i.msg.includes('필수 컬럼')) return true;
+      if(ck.label.includes('행 수')&&i.msg.includes('0건')) return true;
+      if(ck.label.includes('주소')&&i.msg.includes('주소 필드')) return true;
+      if(ck.label.includes('V2')&&i.msg.includes('V2')) return true;
+      return false;
+    });
+    const badgeCls=ck.ok?'b-ok':(relIssues.some(r=>r.type==='err')?'b-err':'b-warn');
+    html+=`<div class="integ-row"><div class="integ-main"><span style="font-size:12px">${ck.label}</span><span class="badge ${badgeCls}">${ck.ok?'통과':relIssues.length+'건'}</span></div>`;
+    relIssues.forEach(ri=>{
+      html+=`<div class="integ-reason">${esc(ri.name)}: ${esc(ri.msg)}</div>`;
+    });
+    html+='</div>';
+  });
+
+  document.getElementById('integCheck').innerHTML=html;
+}
+
+/* ── 보고서 이력 ── */
+function renderReports(){
+  const logs=JSON.parse(localStorage.getItem('gsmm_rpt_logs')||'[]');
+  document.getElementById('rptBadge').textContent=logs.length+'건';
+
+  if(logs.length===0){
+    document.getElementById('reportList').innerHTML=`
+      <div class="empty">
+        보고서 생성 이력이 없습니다.<br>
+        <span style="font-size:11px;color:var(--hint)">GSMM 본체에서 보고서를 생성하면 여기에 자동으로 기록됩니다.</span>
+      </div>
+      <div style="margin-top:16px;padding:14px;background:var(--s2);border-radius:8px;font-size:12px;color:var(--sub)">
+        <div style="font-weight:600;margin-bottom:8px;color:var(--pur2)">💡 연동 방법 안내</div>
+        GSMM 본체의 보고서 생성 함수에 아래 코드를 추가하면 이력이 자동 기록됩니다:
+        <pre style="background:var(--s3);padding:10px;border-radius:6px;margin-top:8px;font-size:11px;color:var(--txt);overflow-x:auto;font-family:'JetBrains Mono',monospace">// 보고서 생성 성공 시
+localStorage.setItem('gsmm_rpt_logs',
+  JSON.stringify([...JSON.parse(
+    localStorage.getItem('gsmm_rpt_logs')||'[]'
+  ), {
+    name: outName,
+    date: new Date().toISOString(),
+    status: 'ok',    // 또는 'fail'
+    reason: ''       // 실패 시 사유
+  }])
+);</pre>
+      </div>`;
+    return;
+  }
+
+  let html='<table class="t"><thead><tr><th>보고서명</th><th style="width:100px">생성일</th><th style="width:60px">상태</th></tr></thead><tbody>';
+  logs.sort((a,b)=>new Date(b.date)-new Date(a.date));
+  logs.forEach(l=>{
+    const date=new Date(l.date).toLocaleDateString('ko-KR',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+    const badge=l.status==='ok'?'<span class="badge b-ok">완료</span>':'<span class="badge b-err">실패</span>';
+    html+=`<tr><td style="font-size:12px">${esc(l.name||'-')}</td><td style="font-size:11px">${date}</td><td>${badge}</td></tr>`;
+    if(l.status==='fail'&&l.reason){
+      html+=`<tr><td colspan="3"><div class="rpt-fail">⚠ ${esc(l.reason)}</div></td></tr>`;
+    }
+  });
+  html+='</tbody></table>';
+  document.getElementById('reportList').innerHTML=html;
+}
+
+/* ── 설정 탭 ── */
+function renderSettings(){
+  const pat=getPat();
+  const resetStr=rateLimit.reset?Math.max(0,Math.round((rateLimit.reset-Date.now())/60000))+'분 후':'—';
+
+  let repoSize='—';
+  let repoPct='—';
+  if(ghRepoInfo){
+    const kb=ghRepoInfo.size||0;
+    repoSize=kb>1024?(kb/1024).toFixed(1)+' MB':kb+' KB';
+    repoPct=(kb/1024/1024*100).toFixed(2)+'%';
+  }
+
+  const rows=[
+    {icon:'🔑',iconBg:'rgba(124,58,237,.15)',name:'PAT 토큰',
+     detail:pat?pat.substring(0,18)+'...':'미설정 — 시간당 60회 제한',
+     badge:pat?'<span class="badge b-ok">유효</span>':'<span class="badge b-warn">미설정</span>'},
+    {icon:'💾',iconBg:'rgba(0,198,255,.1)',name:'저장소 용량',
+     detail:`${repoSize} / 1 GB (${repoPct})`,
+     badge:'<span class="badge b-ok">여유</span>'},
+    {icon:'🌐',iconBg:'rgba(34,197,94,.1)',name:'GitHub API 잔여',
+     detail:`${rateLimit.remaining} / ${rateLimit.limit} (리셋: ${resetStr})`,
+     badge:`<span class="badge ${parseInt(rateLimit.remaining)>100?'b-ok':'b-warn'}">${parseInt(rateLimit.remaining)>100?'정상':'주의'}</span>`},
+    {icon:'📂',iconBg:'rgba(245,158,11,.1)',name:'리포지토리',
+     detail:`${GH_OWNER}/${GH_REPO} (${GH_BRANCH})`,
+     badge:'<span class="badge b-info">public</span>'},
+  ];
+
+  let html='';
+  rows.forEach(r=>{
+    html+=`<div class="set-row">
+      <div class="set-icon" style="background:${r.iconBg}">${r.icon}</div>
+      <div class="set-info"><div class="set-name">${r.name}</div><div class="set-detail">${r.detail}</div></div>
+      ${r.badge}
+    </div>`;
+  });
+
+  // PAT 관리 버튼
+  html+=`<div style="margin-top:16px;display:flex;gap:8px">
+    <button class="hdr-btn" onclick="openPatModal()">🔑 PAT 토큰 ${pat?'변경':'등록'}</button>
+    ${pat?'<button class="hdr-btn" onclick="if(confirm(\'PAT를 삭제할까요?\')){localStorage.removeItem(\'gh_pat\');refreshAll()}" style="border-color:var(--red);color:var(--red)">🗑 PAT 삭제</button>':''}
+  </div>`;
+
+  document.getElementById('settingsArea').innerHTML=html;
+}
+
+/* ═══ 유틸 ═══ */
+function esc(s){
+  if(s==null) return'';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function timeAgo(d){
+  const diff=Date.now()-d.getTime();
+  const min=Math.floor(diff/60000);
+  if(min<1) return'방금';
+  if(min<60) return min+'분 전';
+  const hr=Math.floor(min/60);
+  if(hr<24) return hr+'시간 전';
+  const day=Math.floor(hr/24);
+  if(day<30) return day+'일 전';
+  return d.toLocaleDateString('ko-KR');
+}
+
+/* ═══ 초기 로드 ═══ */
+refreshAll();
+</script>
+</body>
+</html>
