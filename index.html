@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>지하안전 관리시스템 v19.0</title>
+<title>지하안전 관리시스템 v19.1</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
@@ -298,7 +298,7 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
 
 <!-- 헤더 -->
 <header id="hdr">
-  <h1>🗺 지하안전 관리 <span style="font-weight:300;opacity:.5">v19</span></h1>
+  <h1>🗺 지하안전 관리 <span style="font-weight:300;opacity:.5">v19.1</span></h1>
   <div class="hbg">
     <!-- 클릭 추가 토글 -->
     <button class="btn bw hbtn" id="cbtn" onclick="toggleClick()">📍 클릭추가 OFF</button>
@@ -310,6 +310,9 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
     <button class="btn ba hbtn" onclick="exportXlsx()">📊 다운로드</button>
     <button class="btn hbtn" onclick="openRptModal()"
             style="background:#7c3aed;color:#fff;">📄 보고서 생성</button>
+    <button class="btn hbtn" onclick="window.open('gsmm_admin.html','_blank')"
+            style="background:rgba(124,58,237,.15);border:1px solid #7c3aed;color:#c4b5fd;">
+      🛡 관리자</button>
   </div>
   <!-- 검색창 (2번째 줄) -->
   <div class="sw" id="sw">
@@ -497,6 +500,10 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
   <button class="tb" id="tb4" onclick="switchTab(4)"
           style="color:#c4b5fd;">
     <svg viewBox="0 0 24 24" style="stroke:#c4b5fd"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>보고서
+  </button>
+  <button class="tb" id="tb5" onclick="window.open('gsmm_admin.html','_blank')"
+          style="color:#c4b5fd;">
+    <svg viewBox="0 0 24 24" style="stroke:#c4b5fd"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>관리자
   </button>
 </div>
 
