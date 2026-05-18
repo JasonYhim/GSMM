@@ -371,17 +371,6 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
         </button>
         <div id="patStatus" style="font-size:10px;color:#6b7280;text-align:center;margin-top:4px;"></div>
       </div>
-
-      <!-- 보고서 생성 섹션 -->
-      <div class="sec" style="border-top-color:#7c3aed;">
-        <div class="sl" style="color:#c4b5fd;">📄 hwpx 보고서 생성</div>
-        <button onclick="openRptModal()" class="btn"
-                style="width:100%;font-size:11px;padding:7px;
-                       background:rgba(124,58,237,.15);border:1px solid #7c3aed;
-                       color:#c4b5fd;font-weight:700;">
-          📄 보고서 생성 열기
-        </button>
-      </div>
     </div>
   </div>
 
@@ -496,14 +485,6 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
   </button>
   <button class="tb" id="tb3" onclick="switchTab(3)">
     <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>검색
-  </button>
-  <button class="tb" id="tb4" onclick="switchTab(4)"
-          style="color:#c4b5fd;">
-    <svg viewBox="0 0 24 24" style="stroke:#c4b5fd"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>보고서
-  </button>
-  <button class="tb" id="tb5" onclick="window.open('gsmm_admin.html','_blank')"
-          style="color:#c4b5fd;">
-    <svg viewBox="0 0 24 24" style="stroke:#c4b5fd"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>관리자
   </button>
 </div>
 
@@ -629,10 +610,6 @@ function switchTab(n){
   if(n===3){
     ['tMap','tFile','tData'].forEach(id=>document.getElementById(id).style.display='none');
     setTimeout(()=>document.getElementById('sInp').focus(),80);
-  }
-  if(n===4){
-    ['tMap','tFile','tData'].forEach(id=>document.getElementById(id).style.display='none');
-    openRptModal();
   }
 }
 
@@ -1321,7 +1298,6 @@ async function openRptModal(){
 }
 function closeRptModal(){
   document.getElementById('rptModal').classList.remove('show');
-  if(typeof currentTab!=='undefined' && window.innerWidth<768 && currentTab===4) switchTab(0);
 }
 
 // ── GitHub 파일 목록 로드 ──
