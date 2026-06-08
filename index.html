@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>지하안전 관리시스템 v19.1</title>
+<title>지하안전 관리시스템 v19.2</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
@@ -12,7 +12,22 @@
   --bg:#0b101b;--sur:#111827;--s2:#1f2937;--bor:#374151;
   --acc:#00c6ff;--red:#ef4444;--yel:#f59e0b;--grn:#22c55e;--txt:#f1f5f9;
   --gen:#a855f7;--pri:#3b82f6;--urg:#ef4444;--tab:52px;
+  --th-bg:#141e30;--td-bor:#1a2840;--ce-color:#fff;
 }
+/* ── 라이트 모드 ── */
+body.light{
+  --bg:#f0f4f8;--sur:#ffffff;--s2:#e8edf3;--bor:#c9d3df;
+  --acc:#0077aa;--red:#dc2626;--yel:#d97706;--grn:#16a34a;--txt:#1e293b;
+  --gen:#7c3aed;--pri:#2563eb;--urg:#dc2626;
+  --th-bg:#dde5ef;--td-bor:#d1dae6;--ce-color:#1e293b;
+}
+body.light th{background:var(--th-bg);color:var(--acc);}
+body.light td{border-bottom:1px solid var(--td-bor);}
+body.light .ce{color:var(--ce-color);}
+body.light .ce:disabled{color:#94a3b8;}
+body.light header{background:var(--sur);border-color:var(--bor);}
+body.light #leg{background:rgba(240,244,248,.95);}
+body.light .mt{background:rgba(255,255,255,.97);color:#1e293b;}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html{height:100%;}
 body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--txt);
@@ -137,9 +152,9 @@ header h1{font-size:13px;white-space:nowrap;flex-shrink:0;}
 .bp{height:255px;flex-shrink:0;background:var(--sur);
     border-top:2px solid var(--bor);overflow:auto;}
 table{width:100%;border-collapse:collapse;font-size:11px;min-width:2100px;table-layout:fixed;}
-th{position:sticky;top:0;background:#141e30;padding:8px 7px;text-align:left;
+th{position:sticky;top:0;background:var(--th-bg);padding:8px 7px;text-align:left;
    border-bottom:1px solid var(--bor);color:var(--acc);z-index:10;}
-td{padding:3px 7px;border-bottom:1px solid #1a2840;vertical-align:middle;}
+td{padding:5px 7px;border-bottom:1px solid var(--td-bor);vertical-align:middle;}
 tr:hover td{background:rgba(0,198,255,.04);}
 tr.hl td{background:rgba(0,198,255,.1)!important;}
 tr.changed td{background:rgba(245,158,11,.06)!important;}
@@ -180,8 +195,9 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
 .rpt-prog{font-size:11px;color:#c4b5fd;margin-top:10px;text-align:center;min-height:18px;}
 
 /* 셀 입력 */
-.ce{background:none;border:1px solid transparent;color:#fff;
-    width:100%;font-size:11px;outline:none;padding:4px;border-radius:3px;}
+.ce{background:none;border:1px solid transparent;color:var(--ce-color);
+    width:100%;font-size:11px;outline:none;padding:5px 4px;border-radius:3px;
+    min-height:28px;touch-action:manipulation;}
 .ce:focus{border-color:var(--acc);background:rgba(0,198,255,.08);}
 /* 편집 잠금 상태 */
 .ce:disabled{background:rgba(255,255,255,.03);color:#6b7280;cursor:default;border-color:transparent;}
@@ -206,9 +222,9 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
   #dataToolbar{flex-shrink:0;padding:8px 10px;background:var(--s2);
                border-bottom:1px solid var(--bor);display:flex;gap:7px;align-items:center;}
   #tData .bp{display:flex;flex-direction:column;height:100%;border:none;overflow:auto;}
-  #tData table{min-width:1500px;font-size:10px;}
-  #tData th,#tData td{padding:4px 5px;}
-  #tData .ce{font-size:10px;padding:3px;}
+  #tData table{min-width:1500px;font-size:12px;}
+  #tData th,#tData td{padding:7px 6px;}
+  #tData .ce{font-size:12px;padding:6px 5px;min-height:36px;}
   .mfc{background:var(--s2);border-radius:8px;padding:10px 12px;
        margin-bottom:8px;border:1px solid transparent;}
   .mfc.act{border-color:var(--acc);}
@@ -257,8 +273,15 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
 
     <div class="rpt-row">
       <div class="rpt-lbl">③ 엑셀 데이터 파일 선택 (GitHub)</div>
-      <select class="rpt-sel" id="rptXlsxSel">
+      <select class="rpt-sel" id="rptXlsxSel" onchange="onXlsxSelChange()">
         <option value="">-- GitHub 목록 로딩 중 --</option>
+      </select>
+    </div>
+
+    <div class="rpt-row" id="rptYearRow" style="display:none;">
+      <div class="rpt-lbl">④ 보고서 연도 선택 <span style="color:#6b7280;font-weight:400">(통합 파일일 때 연도 지정)</span></div>
+      <select class="rpt-sel" id="rptYearSel">
+        <option value="">-- 전체 (단일연도 파일) --</option>
       </select>
     </div>
 
@@ -267,6 +290,7 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
       ✓ 조사결과 집계 건수 자동 치환<br>
       ✓ 육안조사 결과표 전체 행 자동 채우기<br>
       ✓ 시행사 마크 자동 교체 (구조화 hwpx 선택 시)<br>
+      ✓ <b>통합 파일: 연도 선택 시 해당 연도 데이터만 추출</b><br>
       ✓ 완성된 .hwpx 파일로 다운로드
     </div>
 
@@ -298,8 +322,10 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
 
 <!-- 헤더 -->
 <header id="hdr">
-  <h1>🗺 지하안전 관리 <span style="font-weight:300;opacity:.5">v19.1</span></h1>
+  <h1>🗺 지하안전 관리 <span style="font-weight:300;opacity:.5">v19.2</span></h1>
   <div class="hbg">
+    <!-- 라이트/다크 토글 -->
+    <button class="btn bs hbtn" id="themeBtn" onclick="toggleTheme()" title="라이트/다크 전환">🌙</button>
     <!-- 클릭 추가 토글 -->
     <button class="btn bw hbtn" id="cbtn" onclick="toggleClick()">📍 클릭추가 OFF</button>
     <!-- GitHub 저장 (변경 없으면 비활성) -->
@@ -339,7 +365,7 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
            ondragleave="this.classList.remove('over')"
            ondrop="this.classList.remove('over');handleDrop(event)">
         📁 엑셀 드래그 또는 클릭<br>
-        <span style="color:#6b7280;font-size:10px">RawData 시트 · 6행부터</span>
+        <span style="color:#6b7280;font-size:10px">RawData 시트 · 5행부터</span>
       </div>
       <input type="file" id="fi" style="display:none" accept=".xlsx"
              onchange="readExcel(this.files[0]);this.value=''">
@@ -362,6 +388,14 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
         </div>
       </div>
 
+      <!-- 연도 필터 (사이드바) -->
+      <div class="sec">
+        <div class="sl">📅 연도 필터</div>
+        <div id="sideYearFilterWrap" style="display:flex;flex-wrap:wrap;gap:4px;padding:2px 0;">
+          <span style="color:#6b7280;font-size:10px">파일 불러오면 표시</span>
+        </div>
+      </div>
+
       <!-- PAT 설정 -->
       <div class="sec">
         <div class="sl">⚙ GitHub 저장 설정</div>
@@ -371,6 +405,7 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
         </button>
         <div id="patStatus" style="font-size:10px;color:#6b7280;text-align:center;margin-top:4px;"></div>
       </div>
+
     </div>
   </div>
 
@@ -382,6 +417,20 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
       <div id="map">
         <div id="cbadge">📍 지도를 클릭하여 새 지점 추가</div>
         <div id="gbadge">🔄 주소 변환 중 <span id="gcnt">0</span>건</div>
+        <!-- 연도 필터 패널 -->
+        <div id="yearPanel" style="position:absolute;bottom:130px;right:10px;
+             background:rgba(10,15,26,.92);border:1px solid var(--bor);
+             border-radius:8px;padding:9px 12px;z-index:200;
+             font-size:11px;backdrop-filter:blur(6px);min-width:120px;">
+          <div style="color:var(--acc);font-weight:700;margin-bottom:6px;font-size:11px;">
+            📅 연도 필터
+            <span id="yearBadge" style="margin-left:6px;background:var(--acc);color:#000;
+              font-size:9px;font-weight:700;padding:2px 6px;border-radius:10px;">전체</span>
+          </div>
+          <div id="yearFilterWrap" style="display:flex;flex-direction:column;gap:4px;">
+            <span style="color:#6b7280;font-size:10px">파일 불러오면 연도 표시</span>
+          </div>
+        </div>
         <div id="leg">
           <div class="lt">범 례</div>
           <div class="lr"><div class="ld gen"></div><span>일반</span></div>
@@ -402,6 +451,12 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
 
       <div class="msl">📂 불러온 파일</div>
       <div id="mFlist"></div>
+
+      <!-- 연도 필터 (모바일) -->
+      <div class="msl">📅 연도 필터</div>
+      <div id="mYearFilterWrap" style="display:flex;flex-wrap:wrap;gap:5px;padding:2px 0 8px;">
+        <span style="color:#6b7280;font-size:11px">파일 불러오면 표시</span>
+      </div>
 
       <div class="msl" style="margin-top:14px">🐙 GitHub 파일</div>
       <div id="mGhList" style="font-size:11px;color:#9ca3af;text-align:center;padding:6px 0;">
@@ -435,6 +490,7 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
         <table>
           <thead><tr>
             <th width="32">신구</th>
+            <th width="52">연도</th>
             <th width="42">순번</th><th width="88">조사측선</th><th width="108">조사번호</th>
             <th width="58">침하</th><th width="62">균열</th><th width="58">습윤</th>
             <th width="52">노후도</th><th width="92">침하이력</th>
@@ -455,6 +511,7 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
       <table>
         <thead><tr>
           <th width="32">신구</th>
+          <th width="52">연도</th>
           <th width="42">순번</th><th width="88">조사측선</th><th width="108">조사번호</th>
           <th width="58">침하</th><th width="62">균열</th><th width="58">습윤</th>
           <th width="52">노후도</th><th width="92">침하이력</th>
@@ -669,8 +726,9 @@ function updateGBadge(){const n=geoQ.length;document.getElementById('gcnt').text
         if(d.documents?.length>0){const doc=d.documents[0];def=doc.road_address?doc.road_address.address_name:doc.address.address_name;}}catch(err){}
       const addr=prompt("추가할 지점의 주소:",def||'');
       if(addr===null) return;
-      const row={seq:Date.now()%100000,road:'수동추가',code:'ADD',settle:'양호',crack:'양호',wet:'양호',age:'0',history:'-',sI:'',sJ:'',sK:'',sL:'',sM:'',sN:'',grade:'일반',opinion:'',addr:addr.trim(),infoS:'직접입력',infoT:'현장확인필요',lat,lng,geoOk:true,
-        isNew:true,        // ★ 지도 클릭으로 신규 추가
+      const activeYear=activeFileId&&files[activeFileId]?files[activeFileId].year:String(new Date().getFullYear());
+      const row={year:activeYear,seq:Date.now()%100000,road:'수동추가',code:'ADD',settle:'양호',crack:'양호',wet:'양호',age:'0',history:'-',sI:'',sJ:'',sK:'',sL:'',sM:'',sN:'',grade:'일반',opinion:'',addr:addr.trim(),infoS:'직접입력',infoT:'현장확인필요',lat,lng,geoOk:true,
+        isNew:true,
         isModified:false,
         _key:'r'+Date.now()};
       files[activeFileId].rows.push(row);
@@ -708,16 +766,55 @@ function readExcel(file){
   };
   reader.readAsArrayBuffer(file);
 }
+/* ── 숫자 파싱 헬퍼 ── */
+function toNum(v){const n=parseFloat(v);return isNaN(n)?'':n;}
+/* ── 점수→등급 자동산정 (V2 기준: <6일반/<9우선/≥9긴급) ── */
+function calcGrade(sN){
+  const n=parseFloat(sN);
+  if(isNaN(n)||sN==='') return '일반';
+  if(n>=9) return '긴급';
+  if(n>=6) return '우선';
+  return '일반';
+}
+/* ── 평가점수 자동계산: sI+sJ+sK+sL+sM ── */
+function calcSN(row){
+  const sum=[row.sI,row.sJ,row.sK,row.sL,row.sM]
+    .reduce((acc,v)=>{const n=parseFloat(v);return acc+(isNaN(n)?0:n);},0);
+  return sum===0?'':sum;
+}
+
 function processSheet(sheet,name){
   const all=XLSX.utils.sheet_to_json(sheet,{header:1,defval:''});
   const year=String(all[1]?.[0]||'2025'),corp=String(all[1]?.[1]||''),region=String(all[1]?.[2]||'');
   const rows=[];
-  for(let i=5;i<all.length;i++){
-    const r=all[i]; if(!r[0]&&r[0]!==0) continue;
-    rows.push({seq:r[0],road:String(r[1]||''),code:String(r[2]||''),settle:String(r[3]||''),crack:String(r[4]||''),wet:String(r[5]||''),age:String(r[6]||''),history:String(r[7]||''),sI:r[8]!==''?r[8]:'',sJ:r[9]!==''?r[9]:'',sK:r[10]!==''?r[10]:'',sL:r[11]!==''?r[11]:'',sM:r[12]!==''?r[12]:'',sN:r[13]!==''?r[13]:'',grade:String(r[14]||'일반'),opinion:String(r[15]||''),addr:String(r[16]||'').trim(),infoS:String(r[18]||''),infoT:String(r[19]||''),lat:null,lng:null,geoOk:false,
-      isNew:false,   // ★ GitHub에서 불러온 기존 데이터
-      isModified:false,
-      _key:'r'+i});
+  // ★ 연도 열 자동 감지: A열이 20xx형이면 offset=1
+  let psOffset=0;
+  for(let i=4;i<all.length;i++){
+    const r0=all[i]; if(!r0[0]&&r0[0]!==0) continue;
+    if(/^20\d{2}$/.test(String(r0[0]).trim())) psOffset=1;
+    break;
+  }
+  for(let i=4;i<all.length;i++){           // ★ 4 = 엑셀 5행 (0-based)
+    const r=all[i];
+    const rv=r[psOffset];
+    if(!rv&&rv!==0) continue;
+    if(isNaN(Number(rv))) continue;         // 헤더 텍스트 행 스킵
+    const o=psOffset;
+    const rowYear=o===1?String(r[0]).trim():year;
+    const sI=toNum(r[8+o]),sJ=toNum(r[9+o]),sK=toNum(r[10+o]),
+          sL=toNum(r[11+o]),sM=toNum(r[12+o]);
+    const sNraw=toNum(r[13+o]);
+    const sN=sNraw!==''?sNraw:[sI,sJ,sK,sL,sM].reduce((a,v)=>{const n=parseFloat(v);return a+(isNaN(n)?0:n);},0)||'';
+    const grade=String(r[14+o]||'')||calcGrade(sN);
+    rows.push({
+      year:rowYear,
+      seq:toNum(r[0+o]),road:String(r[1+o]||''),code:String(r[2+o]||''),
+      settle:String(r[3+o]||''),crack:String(r[4+o]||''),wet:String(r[5+o]||''),
+      age:toNum(r[6+o]),history:String(r[7+o]||''),
+      sI,sJ,sK,sL,sM,sN,grade,
+      opinion:String(r[15+o]||''),addr:String(r[16+o]||'').trim(),
+      infoS:String(r[18+o]||''),infoT:String(r[19+o]||''),
+      lat:null,lng:null,geoOk:false,isNew:false,isModified:false,_key:'r'+i});
   }
   const fid='F_'+Date.now();
   files[fid]={name,year,corp,region,rows,visible:true};
@@ -783,10 +880,15 @@ async function saveToGitHub(){
   }
 
   const f=files[activeFileId];
-  const cols=["순번","조사측선명","손상구분번호","침하(mm)","균열","습윤","노후도(년)","지반침하발생이력","침하점수","균열점수","습윤점수","노후도점수","보수보강이력","평가점수","평가등급","조사자의견","인접지번주소","조사위치도","부가정보1","부가정보2"];
-  const rows=f.rows.map(r=>[r.seq,r.road,r.code,r.settle,r.crack,r.wet,r.age,r.history,r.sI,r.sJ,r.sK,r.sL,r.sM,r.sN,r.grade,r.opinion,r.addr,'',r.infoS,r.infoT]);
+  const cols=["연도","순번","조사측선명","손상구분번호","침하(mm)","균열","습윤","노후도(년)","지반침하발생이력","침하점수","균열점수","습윤점수","노후도점수","보수보강이력","평가점수","평가등급","조사자의견","인접지번주소","조사위치도","부가정보1","부가정보2"];
+  const toN=v=>(v===''||v===null||v===undefined)?'':Number(v);
+  const rows=f.rows.map(r=>[r.year||f.year,toN(r.seq),r.road,r.code,r.settle,r.crack,r.wet,toN(r.age),r.history,toN(r.sI),toN(r.sJ),toN(r.sK),toN(r.sL),toN(r.sM),toN(r.sN),r.grade,r.opinion,r.addr,'',r.infoS,r.infoT]);
   const ws=XLSX.utils.aoa_to_sheet([["시행년도","시행사 구분","권역구 구분"],[f.year,f.corp,f.region],[],cols,...rows]);
-  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'RawData');
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'RawData');
+  // ★ V2 시트 자동 생성
+  const wsV2=buildV2Sheet(f.rows,{year:f.year,corp:f.corp,region:f.region});
+  XLSX.utils.book_append_sheet(wb,wsV2,'V2');
   const b64=XLSX.write(wb,{type:'base64',bookType:'xlsx'});
 
   const body={message:'📊 데이터 업데이트 - '+loadedFileName,content:b64};
@@ -829,6 +931,7 @@ async function saveToGitHub(){
 /* ── 마커 관리 ── */
 function placeMarker(fid,key,row){
   if(!map||!row.geoOk||row.lat===null) return;
+  if(yearFilter.size>0&&!yearFilter.has(String(row.year))) return;
   const mk=fid+':'+key;
   if(markerMap.has(mk)){markerMap.get(mk).setPosition(new kakao.maps.LatLng(row.lat,row.lng));return;}
   const gc=row.grade==='긴급'?'urg':row.grade==='우선'?'pri':'gen';
@@ -846,7 +949,12 @@ function placeMarker(fid,key,row){
 function setFileVisible(fid,visible){
   const f=files[fid];if(!f) return;
   f.visible=visible;
-  f.rows.forEach(row=>{const mk=fid+':'+row._key;if(markerMap.has(mk))markerMap.get(mk).setMap(visible?map:null);});
+  f.rows.forEach(row=>{
+    const mk=fid+':'+row._key;
+    if(!markerMap.has(mk)) return;
+    const yearOk=yearFilter.size===0||yearFilter.has(String(row.year));
+    markerMap.get(mk).setMap((visible&&yearOk)?map:null);
+  });
 }
 function updateQCell(fid,key,ok){
   const mk=fid+':'+key;
@@ -888,7 +996,7 @@ function clearSearch(){document.getElementById('sInp').value='';document.getElem
 document.addEventListener('click',e=>{if(!document.getElementById('sw').contains(e.target)&&!document.getElementById('sRes').contains(e.target))document.getElementById('sRes').style.display='none';});
 
 /* ── UI 렌더링 ── */
-function renderAll(){renderSidebar();renderTable('tbody','tr_',true);renderTable('tbody2','tr2_',false);renderMobileFileList();}
+function renderAll(){renderSidebar();renderTable('tbody','tr_',true);renderTable('tbody2','tr2_',false);renderMobileFileList();renderYearFilter();}
 
 function renderSidebar(){
   const fl=document.getElementById('flist');fl.innerHTML='';
@@ -914,10 +1022,12 @@ function renderMobileFileList(){
 function renderTable(tbodyId,rowPrefix,isMobile){
   const tbody=document.getElementById(tbodyId);if(!tbody) return;
   tbody.innerHTML='';
-  const FIELDS=['seq','road','code','settle','crack','wet','age','history','sI','sJ','sK','sL','sM','sN','grade','opinion','addr','infoS','infoT'];
+  const FIELDS=['year','seq','road','code','settle','crack','wet','age','history','sI','sJ','sK','sL','sM','sN','grade','opinion','addr','infoS','infoT'];
   Object.entries(files).forEach(([fid,f])=>{
     if(!f.visible) return;
     f.rows.forEach(row=>{
+      // 연도 필터 적용
+      if(yearFilter.size>0&&!yearFilter.has(String(row.year))) return;
       const mk=fid+':'+row._key;
       const tr=document.createElement('tr');tr.id=rowPrefix+mk;
 
@@ -946,13 +1056,31 @@ function renderTable(tbodyId,rowPrefix,isMobile){
         inp.value=row[field]!==null&&row[field]!==undefined?row[field]:'';
         if(isMobile) inp.disabled=!editMode;
         inp.onchange=ev=>{
-          row[field]=ev.target.value;
+          // ★ 숫자 컬럼은 Number로 저장
+          const NUM_FIELDS=['seq','age','sI','sJ','sK','sL','sM','sN'];
+          if(NUM_FIELDS.includes(field)){
+            const n=parseFloat(ev.target.value);
+            row[field]=isNaN(n)?'':n;
+            ev.target.value=row[field];
+          } else {
+            row[field]=ev.target.value;
+          }
+          // ★ 점수 필드 변경 시 sN 자동계산 → grade 자동산정
+          if(['sI','sJ','sK','sL','sM'].includes(field)){
+            row.sN=calcSN(row);
+            row.grade=calcGrade(row.sN);
+            const allInputs=tr.querySelectorAll('input.ce');
+            const FIELDS_ARR=['seq','road','code','settle','crack','wet','age','history','sI','sJ','sK','sL','sM','sN','grade','opinion','addr','infoS','infoT'];
+            const snIdx=FIELDS_ARR.indexOf('sN');
+            const grIdx=FIELDS_ARR.indexOf('grade');
+            if(allInputs[snIdx]) allInputs[snIdx].value=row.sN;
+            if(allInputs[grIdx]) allInputs[grIdx].value=row.grade;
+          }
           // 기존 데이터 수정 시 isModified 표시
           if(!row.isNew) {
             row.isModified=true;
             tr.classList.remove('row-new');
             tr.classList.add('changed');
-            // 배지 M으로 교체
             const bd=tr.querySelector('td:first-child');
             if(bd&&!bd.querySelector('.badge-mod')){
               bd.innerHTML='<span class="badge-mod">M</span>';
@@ -1069,28 +1197,38 @@ function parseFname(name){
   if(p.length<3)throw new Error(`파일명 형식 오류: ${name}\n예) 25-신분당-강남구-보고서.xlsx`);
   return{year:p[0],operator:p[1],region:p[2]};
 }
-function loadV2(wb){
+function loadV2(wb,filterYear){
   const ws=wb.Sheets['V2'];
   if(!ws)throw new Error('V2 시트를 찾을 수 없습니다.');
   const ec=(r,c)=>{const a=XLSX.utils.encode_cell({r,c});return ws[a]!=null?String(ws[a].v??''):'';};
+  // ★ 연도 열 자동 감지
+  const probe=ec(8,0);
+  const hasYearCol=/^20\d{2}$/.test(probe.trim());
+  const o=hasYearCol?1:0;
   const hdr={
-    facility:ec(4,4)||'신분당선',
-    period:  ec(4,6)||'',
-    manager: ec(4,9)||'신분당선',
-    inspector:ec(4,12)||'기술참여자 명단 참조'
+    facility:ec(4,4+o)||'신분당선',
+    period:  ec(4,6+o)||'',
+    manager: ec(4,9+o)||'신분당선',
+    inspector:ec(4,12+o)||'기술참여자 명단 참조'
   };
-  const range=XLSX.utils.decode_range(ws['!ref']||'A1:P100');
+  const range=XLSX.utils.decode_range(ws['!ref']||'A1:Q100');
   const data=[];
   for(let r=8;r<=range.e.r;r++){
     const row=[];
-    for(let c=0;c<16;c++){
+    for(let c=o;c<16+o;c++){
       const a=XLSX.utils.encode_cell({r,c});
       row.push(ws[a]!=null?ws[a].v:'');
     }
     const seq=Number(row[0]);
-    if(!isNaN(seq)&&seq>0) data.push(row);
+    if(!isNaN(seq)&&seq>0){
+      if(filterYear){
+        const rowYear=hasYearCol?String(ec(r,0)).trim():'';
+        if(rowYear&&rowYear!==String(filterYear)) continue;
+      }
+      data.push(row);
+    }
   }
-  if(!data.length)throw new Error('V2 시트에 데이터가 없습니다.');
+  if(!data.length)throw new Error('V2 시트에 데이터가 없습니다.'+(filterYear?` (${filterYear}년 없음)`:''));
   return{hdr,data};
 }
 
@@ -1354,19 +1492,23 @@ async function generateReport(){
   try{
     // 1. 파일명 파싱
     prog.textContent='📂 파일명 분석 중...';
-    const{year:year2,operator,region}=parseFname(xlsxName);
+    const{year:yearFromName,operator,region}=parseFname(xlsxName);
     const ri=REGION_INFO[region];
     if(!ri)throw new Error(`지원하지 않는 지역명: ${region}`);
     const[gw,sg]=ri;
     const sta=STA_MAP[`${operator}|${region}`]||'구간 정보 없음';
-    const fullYear='20'+year2;
+    // ★ 연도: 드롭다운 선택값 우선, 없으면 파일명에서 추출
+    const selYear=document.getElementById('rptYearSel')?.value||'';
+    const year2=selYear?(selYear.length===4?selYear.slice(2):selYear):yearFromName;
+    const fullYear=selYear||('20'+yearFromName);
 
-    // 2. 엑셀 V2 시트 읽기
+    // 2. 엑셀 V2 시트 읽기 (filterYear 전달)
     prog.textContent='📊 엑셀 데이터 읽는 중...';
     const xlsxResp   = await fetch(xlsxUrl);
     const xlsxBuffer = await xlsxResp.arrayBuffer();
     const wb=XLSX.read(new Uint8Array(xlsxBuffer),{type:'array'});
-    const{hdr,data}=loadV2(wb);
+    const filterYear=selYear||null;
+    const{hdr,data}=loadV2(wb,filterYear);
     const total=data.length;
     const lc={};
     for(const row of data){const l=String(row[COL.line]||'').trim();if(l)lc[l]=(lc[l]||0)+1;}
@@ -1423,7 +1565,7 @@ async function generateReport(){
     const outBlob=await outZip.generateAsync({type:'blob',mimeType:'application/hwp+zip'});
 
     // 8. 다운로드
-    const outName=`신분당선 지하안전점검 육안조사 실시결과 보고서 (${sg} ${year2}년).hwpx`;
+    const outName=`신분당선 지하안전점검 육안조사 실시결과 보고서 (${sg} ${fullYear}년).hwpx`;
     const url=URL.createObjectURL(outBlob);
     const a=document.createElement('a');
     a.href=url; a.download=outName; a.click();
@@ -1441,14 +1583,143 @@ async function generateReport(){
 }
 
 
+/* ══ V2 시트 자동 생성 ══ */
+function buildV2Sheet(rawRows,meta){
+  const{year}=meta;
+  const header=[
+    [null],['○ 육안조사 결과표'],[null],
+    ['연도','광역시도명',null,'서군구명',null,'대상시설명',null,'조사기간',null,null,'시설물관리자',null,null,'조사자'],
+    [year,{f:'LEFT(RawData!D2,3)'},null,{f:'MID(RawData!D2,4,10)'},null,'신분당선',null,year+'년도 조사기간',null,null,{f:'RawData!C2'},null,null,'기술참여자 명단 참조'],
+    [null],
+    ['연도','순번','조사측선명','손상구분번호','조사결과',null,null,null,null,'평가항목별 점수',null,null,null,null,'평가점수','평가등급','조사자 의견'],
+    [null,null,null,null,'침하(mm)','균열','습윤','노후도(년)','지반침하 발생 등의 이력','침하','균열','습윤','노후도','보수보강이력',null,null,null],
+  ];
+  const dataRows=rawRows.map((_,idx)=>{
+    const rR=idx+5; const vR=idx+9;
+    return[
+      {f:`RawData!A${rR}`},
+      {f:`RIGHT(RawData!B${rR},2)`},
+      {f:`RawData!C${rR}`},{f:`RawData!D${rR}`},
+      {f:`RawData!E${rR}`},{f:`RawData!F${rR}`},
+      {f:`RawData!G${rR}`},{f:`RawData!H${rR}`},{f:`RawData!I${rR}`},
+      {f:`IF(E${vR}="양호",0,IF(E${vR}="보통",3,IF(E${vR}="불량",9,0)))`},
+      {f:`IF(F${vR}="거북등",3,IF(RIGHT(F${vR},2)="균열",1,IF(F${vR}="-",0,0)))`},
+      {f:`IF(G${vR}="유출",9,IF(G${vR}="습윤",1,IF(G${vR}="양호",0,IF(G${vR}="건조",0,0))))`},
+      {f:`IF(H${vR}>=30,2,IF(H${vR}>=10,1,0))`},
+      {f:`IF(I${vR}="-",0,1)`},
+      {f:`SUM(J${vR}:N${vR})`},
+      {f:`IF(O${vR}<6,"일반",IF(O${vR}<9,"우선","긴급"))`},
+      {f:`RawData!Q${rR}`},
+    ];
+  });
+  return XLSX.utils.aoa_to_sheet([...header,...dataRows]);
+}
+
+/* ── 엑셀 선택 변경 시: 연도 드롭다운 동적 구성 ── */
+async function onXlsxSelChange(){
+  const xlsxInfo=document.getElementById('rptXlsxSel').value;
+  const yearRow=document.getElementById('rptYearRow');
+  const yearSel=document.getElementById('rptYearSel');
+  yearSel.innerHTML='<option value="">-- 전체 (단일연도 파일) --</option>';
+  yearRow.style.display='none';
+  if(!xlsxInfo) return;
+  try{
+    const[xlsxUrl]=xlsxInfo.split('|');
+    const resp=await fetch(xlsxUrl);
+    const buffer=await resp.arrayBuffer();
+    const wb=XLSX.read(new Uint8Array(buffer),{type:'array'});
+    const ws=wb.Sheets['V2']||wb.Sheets['RawData'];
+    if(!ws) return;
+    const range=XLSX.utils.decode_range(ws['!ref']||'A1:A100');
+    const years=new Set();
+    for(let r=8;r<=range.e.r;r++){
+      const a=XLSX.utils.encode_cell({r,c:0});
+      const v=ws[a]?String(ws[a].v??'').trim():'';
+      if(/^20\d{2}$/.test(v)) years.add(v);
+    }
+    if(years.size>1){
+      yearSel.innerHTML='<option value="">-- 연도를 선택하세요 --</option>'
+        +[...years].sort().map(y=>`<option value="${y}">${y}년</option>`).join('');
+      yearRow.style.display='block';
+    } else if(years.size===1){
+      yearSel.innerHTML=`<option value="${[...years][0]}">${[...years][0]}년 (자동감지)</option>`;
+    }
+  }catch(e){console.warn('연도 감지 실패:',e);}
+}
+
 function exportXlsx(){
   if(!activeFileId||!files[activeFileId]){alert("파일을 선택하세요.");return;}
   const f=files[activeFileId];
-  const cols=["순번","조사측선명","손상구분번호","침하(mm)","균열","습윤","노후도(년)","지반침하발생이력","침하점수","균열점수","습윤점수","노후도점수","보수보강이력","평가점수","평가등급","조사자의견","인접지번주소","조사위치도","부가정보1","부가정보2"];
-  const rows=f.rows.map(r=>[r.seq,r.road,r.code,r.settle,r.crack,r.wet,r.age,r.history,r.sI,r.sJ,r.sK,r.sL,r.sM,r.sN,r.grade,r.opinion,r.addr,'',r.infoS,r.infoT]);
-  const ws=XLSX.utils.aoa_to_sheet([["시행년도","시행사 구분","권역구 구분"],[f.year,f.corp,f.region],[],cols,...rows]);
-  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'RawData');
+  const cols=["연도","순번","조사측선명","손상구분번호","침하(mm)","균열","습윤","노후도(년)","지반침하발생이력","침하점수","균열점수","습윤점수","노후도점수","보수보강이력","평가점수","평가등급","조사자의견","인접지번주소","조사위치도","부가정보1","부가정보2"];
+  const toN=v=>(v===''||v===null||v===undefined)?'':Number(v);
+  const rawDataArr=f.rows.map(r=>[r.year||f.year,toN(r.seq),r.road,r.code,r.settle,r.crack,r.wet,toN(r.age),r.history,toN(r.sI),toN(r.sJ),toN(r.sK),toN(r.sL),toN(r.sM),toN(r.sN),r.grade,r.opinion,r.addr,'',r.infoS,r.infoT]);
+  const ws=XLSX.utils.aoa_to_sheet([["시행년도","시행사 구분","권역구 구분"],[f.year,f.corp,f.region],[],cols,...rawDataArr]);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'RawData');
+  const wsV2=buildV2Sheet(f.rows,{year:f.year,corp:f.corp,region:f.region});
+  XLSX.utils.book_append_sheet(wb,wsV2,'V2');
   XLSX.writeFile(wb,'지하안전_갱신_'+f.name);
+}
+/* ── 전역: 연도 필터 ── */
+let yearFilter=new Set();
+
+/* ── 라이트/다크 토글 ── */
+function toggleTheme(){
+  const isLight=document.body.classList.toggle('light');
+  document.getElementById('themeBtn').textContent=isLight?'🌙':'☀️';
+  localStorage.setItem('theme',isLight?'light':'dark');
+}
+(function initTheme(){
+  if(localStorage.getItem('theme')==='light'){
+    document.body.classList.add('light');
+    const btn=document.getElementById('themeBtn');
+    if(btn) btn.textContent='🌙';
+  }
+})();
+
+/* ── 연도 필터 함수 ── */
+function getAvailableYears(){
+  const ys=new Set();
+  Object.values(files).forEach(f=>f.rows.forEach(r=>{if(r.year)ys.add(String(r.year));}));
+  return[...ys].sort();
+}
+function applyYearFilter(){
+  const checks=document.querySelectorAll('.yf-chk');
+  const selected=[];
+  checks.forEach(c=>{if(c.checked)selected.push(c.value);});
+  const allYears=getAvailableYears();
+  yearFilter=(selected.length===0||selected.length===allYears.length)?new Set():new Set(selected);
+  Object.entries(files).forEach(([fid,f])=>{
+    if(!f.visible) return;
+    f.rows.forEach(row=>{
+      const mk=fid+':'+row._key;
+      if(!markerMap.has(mk)) return;
+      const yearOk=yearFilter.size===0||yearFilter.has(String(row.year));
+      markerMap.get(mk).setMap(yearOk?map:null);
+    });
+  });
+  renderAll();
+  updateYearBadge();
+}
+function updateYearBadge(){
+  const badge=document.getElementById('yearBadge');
+  if(!badge) return;
+  if(yearFilter.size===0){badge.textContent='전체';badge.style.background='var(--acc)';badge.style.color='#000';}
+  else{badge.textContent=[...yearFilter].sort().join(', ')+'년';badge.style.background='var(--yel)';badge.style.color='#000';}
+}
+function renderYearFilter(){
+  const allYears=getAvailableYears();
+  ['yearFilterWrap','sideYearFilterWrap','mYearFilterWrap'].forEach(id=>{
+    const el=document.getElementById(id);if(!el) return;
+    if(allYears.length===0){el.innerHTML='<span style="color:#6b7280;font-size:10px">파일 불러오면 연도 표시</span>';return;}
+    el.innerHTML=allYears.map(y=>`<label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;background:var(--s2);border:1px solid var(--bor);border-radius:5px;padding:4px 8px;user-select:none;"><input type="checkbox" class="yf-chk" value="${y}" ${yearFilter.size===0||yearFilter.has(y)?'checked':''} onchange="applyYearFilter()">${y}년</label>`).join('');
+  });
+  updateYearBadge();
+}
+/* ── 클릭추가 마커에 연도 필터 반영 ── */
+function placeMarkerWithFilter(fid,key,row){
+  if(yearFilter.size>0&&!yearFilter.has(String(row.year))) return;
+  placeMarker(fid,key,row);
 }
 </script>
 </body>
