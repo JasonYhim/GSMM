@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>지하안전 관리시스템 v19.3</title>
+<title>지하안전 관리시스템 v19.4</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
@@ -322,7 +322,7 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
 
 <!-- 헤더 -->
 <header id="hdr">
-  <h1>🗺 지하안전 관리 <span style="font-weight:300;opacity:.5">v19.3</span></h1>
+  <h1>🗺 지하안전 관리 <span style="font-weight:300;opacity:.5">v19.4</span></h1>
   <div class="hbg">
     <!-- 라이트/다크 토글 -->
     <button class="btn bs hbtn" id="themeBtn" onclick="toggleTheme()" title="라이트/다크 전환">🌙</button>
@@ -1222,38 +1222,94 @@ function parseFname(name){
 function loadV2(wb,filterYear){
   const ws=wb.Sheets['V2'];
   if(!ws)throw new Error('V2 시트를 찾을 수 없습니다.');
-  const ec=(r,c)=>{const a=XLSX.utils.encode_cell({r,c});return ws[a]!=null?String(ws[a].v??''):'';};
-  // ★ 연도 열 자동 감지
-  const probe=ec(8,0);
-  const hasYearCol=/^20\d{2}$/.test(probe.trim());
-  const o=hasYearCol?1:0;
-  // ★ 새 구조: 시행사=B2(r=1,c=1), 지역=C2(r=1,c=2)
-  //   데이터헤더 행(4행=r=3)에서 기간 등 추출 시도
-  const corpVal =ec(1,1)||'';    // B2: 시행사
-  const regionVal=ec(1,2)||'';   // C2: 지역
-  const hdr={
-    facility:corpVal||ec(4,4+o)||'신분당선',
-    period:  ec(4,6+o)||ec(3,6+o)||'',
-    manager: corpVal||ec(4,9+o)||'신분당선',
-    inspector:ec(4,12+o)||'기술참여자 명단 참조'
+
+  // ── 셀 값 읽기: .v 캐시 우선, 없으면 .f 수식에서 RawData 참조행 파싱 ──
+  const cellRef=(r,c)=>XLSX.utils.encode_cell({r,c});
+  const cv=(r,c)=>{
+    const cell=ws[cellRef(r,c)];
+    if(!cell) return '';
+    // .v 캐시가 있으면 그대로 사용
+    if(cell.v!==undefined&&cell.v!==null) return String(cell.v);
+    // 수식 셀이고 캐시 없음 → 수식 텍스트 반환 (하위에서 추가 처리)
+    if(cell.f) return '__FORMULA__:'+cell.f;
+    return '';
   };
+  // 수식에서 RawData!XX 참조 행의 실제 값을 RawData 시트에서 읽기
+  const rawWs=wb.Sheets['RawData'];
+  const rawVal=(formula,col)=>{
+    // "=RawData!E5" 또는 "=IF(...RawData!E5...)" 형태에서 행번호 추출
+    const m=formula.match(/RawData![A-Z]+(\d+)/);
+    if(!m||!rawWs) return '';
+    const rawRow=parseInt(m[1])-1; // 0-based
+    const cell=rawWs[XLSX.utils.encode_cell({r:rawRow,c:col})];
+    return cell?(cell.v!==undefined?cell.v:''):'';
+  };
+
+  // ── V2 구조: 연도열 없음(o=0), 데이터 시작 r=8(9행) ──
+  const o=0;
+
+  // ── hdr: 5행(r=4)에 실제값 있음 ──
+  const hdr={
+    facility: (()=>{const v=cv(4,9+o);return v.startsWith('__FORMULA__')?rawVal(v,1):v||'신분당선';})(),
+    period:   (()=>{const v=cv(4,6+o);return v.startsWith('__FORMULA__')?rawVal(v,6):v||'';})(),
+    manager:  (()=>{const v=cv(4,9+o);return v.startsWith('__FORMULA__')?rawVal(v,1):v||'신분당선';})(),
+    inspector: (()=>{const v=cv(4,12+o);return v.startsWith('__FORMULA__')?rawVal(v,12):v||'기술참여자 명단 참조';})()
+  };
+
   const range=XLSX.utils.decode_range(ws['!ref']||'A1:Q100');
   const data=[];
+
   for(let r=8;r<=range.e.r;r++){
+    // ── 행 유효성: A열이 수식이거나 값이 있으면 데이터 행 ──
+    const cellA=ws[cellRef(r,o)];
+    if(!cellA) continue; // 완전히 빈 행 스킵
+
+    // ── 16컬럼 읽기: 캐시 없는 수식은 RawData에서 직접 추출 ──
     const row=[];
-    for(let c=o;c<16+o;c++){
-      const a=XLSX.utils.encode_cell({r,c});
-      row.push(ws[a]!=null?ws[a].v:'');
-    }
-    const seq=Number(row[0]);
-    if(!isNaN(seq)&&seq>0){
-      if(filterYear){
-        const rowYear=hasYearCol?String(ec(r,0)).trim():'';
-        if(rowYear&&rowYear!==String(filterYear)) continue;
+    // RawData 참조 행 번호: A열 수식 "=RIGHT(RawData!B5,2)"에서 추출
+    const aFormula=cellA.f||'';
+    const rawRowMatch=aFormula.match(/RawData![A-Z]+(\d+)/);
+    const rawRowNum=rawRowMatch?parseInt(rawRowMatch[1]):null; // 1-based 엑셀행
+    const rawR=rawRowNum?rawRowNum-1:null; // 0-based
+
+    for(let col=o;col<16+o;col++){
+      const cell=ws[cellRef(r,col)];
+      if(!cell){row.push('');continue;}
+      if(cell.v!==undefined&&cell.v!==null){
+        // 숫자형 점수는 Number, 나머지는 String
+        row.push(cell.v);
+      } else if(cell.f&&rawR!==null&&rawWs){
+        // 캐시 없는 수식 → RawData에서 직접 읽기
+        // 열 매핑: V2 col(0-based) → RawData col
+        // V2: A=순번, B=측선, C=손상구분, D=침하, E=균열, F=습윤, G=노후도
+        //     H=이력, I~M=점수들, N=평가점수, O=평가등급, P=조사의견
+        // RawData: A=연도, B=순번, C=측선, D=손상구분, E=침하, F=균열,
+        //          G=습윤, H=노후도, I=이력, J~N=점수, O=평가점수, P=등급, Q=의견
+        const V2_TO_RAW=[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]; // B~Q (0-based: 1~16)
+        const rawCol=V2_TO_RAW[col-o];
+        const rawCell=rawWs[XLSX.utils.encode_cell({r:rawR,c:rawCol})];
+        row.push(rawCell&&rawCell.v!==undefined?rawCell.v:'');
+      } else {
+        row.push('');
       }
-      data.push(row);
     }
+
+    // seq 판단: row[0](순번). 값이 있고 숫자변환 가능하면 유효
+    const seqVal=row[0];
+    const seqNum=Number(seqVal);
+    const isValid= seqVal!==''&&seqVal!==null&&seqVal!==undefined&&
+                   (!isNaN(seqNum)&&seqNum>0 || String(seqVal).trim()!=='');
+    if(!isValid) continue;
+
+    // filterYear 적용 (V2엔 연도열 없으므로 RawData A열에서 직접 확인)
+    if(filterYear&&rawR!==null&&rawWs){
+      const yCell=rawWs[XLSX.utils.encode_cell({r:rawR,c:0})]; // RawData A열=연도
+      const rowYear=yCell&&yCell.v!==undefined?String(yCell.v).trim():'';
+      if(rowYear&&rowYear!==String(filterYear)) continue;
+    }
+    data.push(row);
   }
+
   if(!data.length)throw new Error('V2 시트에 데이터가 없습니다.'+(filterYear?` (${filterYear}년 없음)`:''));
   return{hdr,data};
 }
