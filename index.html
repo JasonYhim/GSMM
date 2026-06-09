@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>지하안전 관리시스템 v19.2</title>
+<title>지하안전 관리시스템 v19.3</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
@@ -322,7 +322,7 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
 
 <!-- 헤더 -->
 <header id="hdr">
-  <h1>🗺 지하안전 관리 <span style="font-weight:300;opacity:.5">v19.2</span></h1>
+  <h1>🗺 지하안전 관리 <span style="font-weight:300;opacity:.5">v19.3</span></h1>
   <div class="hbg">
     <!-- 라이트/다크 토글 -->
     <button class="btn bs hbtn" id="themeBtn" onclick="toggleTheme()" title="라이트/다크 전환">🌙</button>
@@ -365,7 +365,7 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
            ondragleave="this.classList.remove('over')"
            ondrop="this.classList.remove('over');handleDrop(event)">
         📁 엑셀 드래그 또는 클릭<br>
-        <span style="color:#6b7280;font-size:10px">RawData 시트 · 5행부터</span>
+        <span style="color:#6b7280;font-size:10px">RawData 시트 · X-Y-보고서.xlsx</span>
       </div>
       <input type="file" id="fi" style="display:none" accept=".xlsx"
              onchange="readExcel(this.files[0]);this.value=''">
@@ -785,22 +785,29 @@ function calcSN(row){
 
 function processSheet(sheet,name){
   const all=XLSX.utils.sheet_to_json(sheet,{header:1,defval:''});
-  const year=String(all[1]?.[0]||'2025'),corp=String(all[1]?.[1]||''),region=String(all[1]?.[2]||'');
+  // ★ 새 구조: B1=시행사레이블, C1=권역레이블, B2=시행사값, C2=권역값
+  //   구버전: A1=시행년도, B1=시행사, C1=권역 → all[1][0]=연도
+  const corp  = String(all[1]?.[1]||'');    // B2
+  const region= String(all[1]?.[2]||'');    // C2
   const rows=[];
-  // ★ 연도 열 자동 감지: A열이 20xx형이면 offset=1
-  let psOffset=0;
+  // ★ 연도 열 자동 감지: 데이터 첫행 A열이 20xx이면 offset=1(연도열 있음)
+  let psOffset=0, metaYear='';
   for(let i=4;i<all.length;i++){
-    const r0=all[i]; if(!r0[0]&&r0[0]!==0) continue;
-    if(/^20\d{2}$/.test(String(r0[0]).trim())) psOffset=1;
+    const r0=all[i];
+    const v0=String(r0[0]??'').trim();
+    if(!v0) continue;
+    if(/^20\d{2}$/.test(v0)){psOffset=1;metaYear=v0;}  // 새 구조: A열=연도
+    else metaYear=String(all[1]?.[0]||new Date().getFullYear()); // 구버전
     break;
   }
-  for(let i=4;i<all.length;i++){           // ★ 4 = 엑셀 5행 (0-based)
+  const fileYear=metaYear||String(new Date().getFullYear());
+  for(let i=4;i<all.length;i++){
     const r=all[i];
-    const rv=r[psOffset];
-    if(!rv&&rv!==0) continue;
-    if(isNaN(Number(rv))) continue;         // 헤더 텍스트 행 스킵
+    const rv=r[psOffset];                          // 순번 위치
+    if(rv===''||rv===null||rv===undefined) continue;
+    if(isNaN(Number(rv))||String(rv).trim()==='') continue; // 헤더행 스킵
     const o=psOffset;
-    const rowYear=o===1?String(r[0]).trim():year;
+    const rowYear=o===1?String(r[0]).trim():fileYear;
     const sI=toNum(r[8+o]),sJ=toNum(r[9+o]),sK=toNum(r[10+o]),
           sL=toNum(r[11+o]),sM=toNum(r[12+o]);
     const sNraw=toNum(r[13+o]);
@@ -817,7 +824,7 @@ function processSheet(sheet,name){
       lat:null,lng:null,geoOk:false,isNew:false,isModified:false,_key:'r'+i});
   }
   const fid='F_'+Date.now();
-  files[fid]={name,year,corp,region,rows,visible:true};
+  files[fid]={name,year:fileYear,corp,region,rows,visible:true};
   activeFileId=fid;
   setDirty(false);
   renderAll();
@@ -873,7 +880,11 @@ async function saveToGitHub(){
   if(!activeFileId||!files[activeFileId]){alert("저장할 파일을 선택하세요.");return;}
   if(!loadedFileName){
     // 로컬 업로드 파일은 새 파일로 저장
-    const name=prompt("GitHub에 저장할 파일명 (확장자 포함):",files[activeFileId].name||'data.xlsx');
+    const f2=files[activeFileId];
+    const defName=(f2.corp&&f2.region)
+      ? `${f2.corp.replace(/㈜/g,'').trim()}-${f2.region}-보고서.xlsx`
+      : (f2.name||'data.xlsx');
+    const name=prompt("GitHub에 저장할 파일명 (확장자 포함):",defName);
     if(!name) return;
     loadedFileName=name;
     loadedFileSha=null; // 새 파일
@@ -883,7 +894,7 @@ async function saveToGitHub(){
   const cols=["연도","순번","조사측선명","손상구분번호","침하(mm)","균열","습윤","노후도(년)","지반침하발생이력","침하점수","균열점수","습윤점수","노후도점수","보수보강이력","평가점수","평가등급","조사자의견","인접지번주소","조사위치도","부가정보1","부가정보2"];
   const toN=v=>(v===''||v===null||v===undefined)?'':Number(v);
   const rows=f.rows.map(r=>[r.year||f.year,toN(r.seq),r.road,r.code,r.settle,r.crack,r.wet,toN(r.age),r.history,toN(r.sI),toN(r.sJ),toN(r.sK),toN(r.sL),toN(r.sM),toN(r.sN),r.grade,r.opinion,r.addr,'',r.infoS,r.infoT]);
-  const ws=XLSX.utils.aoa_to_sheet([["시행년도","시행사 구분","권역구 구분"],[f.year,f.corp,f.region],[],cols,...rows]);
+  const ws=XLSX.utils.aoa_to_sheet([[null,"시행사 구분","권역구 구분"],[null,f.corp,f.region],[],cols,...rows]);
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'RawData');
   // ★ V2 시트 자동 생성
@@ -1192,10 +1203,21 @@ function calcIJN(total,lc){
 
 // ── 엑셀 파싱 ──
 function parseFname(name){
-  const base=name.replace(/\.xlsx?$/i,'').replace(/-보고서$/,'');
+  // 파일명 규칙: "X-Y-보고서.xlsx"  (X=시행사, Y=지역)
+  // 구버전 호환:  "25-신분당-강남구-보고서.xlsx"  (연도 포함)
+  const base=name.replace(/\.xlsx?$/i,'')
+                 .replace(/^지하안전_갱신_/,'')   // 구버전 접두어 제거
+                 .replace(/-보고서.*$/,'');        // -보고서, -보고서(양식) 등 제거
   const p=base.split('-');
-  if(p.length<3)throw new Error(`파일명 형식 오류: ${name}\n예) 25-신분당-강남구-보고서.xlsx`);
-  return{year:p[0],operator:p[1],region:p[2]};
+  // 연도가 앞에 있는 구버전: p[0]이 2자리 숫자
+  if(p.length>=3 && /^\d{2}$/.test(p[0])){
+    return{year:p[0],operator:p[1],region:p[2]};
+  }
+  // 새 규칙: p[0]=시행사, p[1]=지역 (연도는 엑셀 데이터에서)
+  if(p.length>=2){
+    return{year:'',operator:p[0],region:p[1]};
+  }
+  throw new Error(`파일명 형식 오류: ${name}\n예) 경기철도-성남시-보고서.xlsx`);
 }
 function loadV2(wb,filterYear){
   const ws=wb.Sheets['V2'];
@@ -1205,10 +1227,14 @@ function loadV2(wb,filterYear){
   const probe=ec(8,0);
   const hasYearCol=/^20\d{2}$/.test(probe.trim());
   const o=hasYearCol?1:0;
+  // ★ 새 구조: 시행사=B2(r=1,c=1), 지역=C2(r=1,c=2)
+  //   데이터헤더 행(4행=r=3)에서 기간 등 추출 시도
+  const corpVal =ec(1,1)||'';    // B2: 시행사
+  const regionVal=ec(1,2)||'';   // C2: 지역
   const hdr={
-    facility:ec(4,4+o)||'신분당선',
-    period:  ec(4,6+o)||'',
-    manager: ec(4,9+o)||'신분당선',
+    facility:corpVal||ec(4,4+o)||'신분당선',
+    period:  ec(4,6+o)||ec(3,6+o)||'',
+    manager: corpVal||ec(4,9+o)||'신분당선',
     inspector:ec(4,12+o)||'기술참여자 명단 참조'
   };
   const range=XLSX.utils.decode_range(ws['!ref']||'A1:Q100');
@@ -1497,10 +1523,17 @@ async function generateReport(){
     if(!ri)throw new Error(`지원하지 않는 지역명: ${region}`);
     const[gw,sg]=ri;
     const sta=STA_MAP[`${operator}|${region}`]||'구간 정보 없음';
-    // ★ 연도: 드롭다운 선택값 우선, 없으면 파일명에서 추출
+    // ★ 연도: 드롭다운 선택값 우선 → 파일명 → 데이터 첫행에서 추출
     const selYear=document.getElementById('rptYearSel')?.value||'';
-    const year2=selYear?(selYear.length===4?selYear.slice(2):selYear):yearFromName;
-    const fullYear=selYear||('20'+yearFromName);
+    let year2=selYear?(selYear.length===4?selYear.slice(2):selYear):yearFromName;
+    let fullYear=selYear||(yearFromName?('20'+yearFromName):'');
+    // 파일명에 연도 없는 새 규칙 대응: data 첫행 연도 사용
+    if(!fullYear && data.length>0){
+      const dy=String(data[0][0]??'');  // V2 A열 첫 데이터 연도
+      if(/^20\d{2}$/.test(dy)){fullYear=dy;year2=dy.slice(2);}
+    }
+    if(!fullYear) fullYear=String(new Date().getFullYear());
+    if(!year2) year2=fullYear.slice(2);
 
     // 2. 엑셀 V2 시트 읽기 (filterYear 전달)
     prog.textContent='📊 엑셀 데이터 읽는 중...';
@@ -1588,8 +1621,9 @@ function buildV2Sheet(rawRows,meta){
   const{year}=meta;
   const header=[
     [null],['○ 육안조사 결과표'],[null],
-    ['연도','광역시도명',null,'서군구명',null,'대상시설명',null,'조사기간',null,null,'시설물관리자',null,null,'조사자'],
-    [year,{f:'LEFT(RawData!D2,3)'},null,{f:'MID(RawData!D2,4,10)'},null,'신분당선',null,year+'년도 조사기간',null,null,{f:'RawData!C2'},null,null,'기술참여자 명단 참조'],
+    [null,'시행사 구분','권역구 구분',null,'대상시설명',null,'조사기간',null,null,'시설물관리자',null,null,'조사자'],
+    // ★ B2=시행사, C2=지역 참조 (새 구조)
+    [null,{f:'RawData!B2'},{f:'RawData!C2'},null,'신분당선',null,'조사기간',null,null,{f:'RawData!B2'},null,null,'기술참여자 명단 참조'],
     [null],
     ['연도','순번','조사측선명','손상구분번호','조사결과',null,null,null,null,'평가항목별 점수',null,null,null,null,'평가점수','평가등급','조사자 의견'],
     [null,null,null,null,'침하(mm)','균열','습윤','노후도(년)','지반침하 발생 등의 이력','침하','균열','습윤','노후도','보수보강이력',null,null,null],
@@ -1653,12 +1687,16 @@ function exportXlsx(){
   const cols=["연도","순번","조사측선명","손상구분번호","침하(mm)","균열","습윤","노후도(년)","지반침하발생이력","침하점수","균열점수","습윤점수","노후도점수","보수보강이력","평가점수","평가등급","조사자의견","인접지번주소","조사위치도","부가정보1","부가정보2"];
   const toN=v=>(v===''||v===null||v===undefined)?'':Number(v);
   const rawDataArr=f.rows.map(r=>[r.year||f.year,toN(r.seq),r.road,r.code,r.settle,r.crack,r.wet,toN(r.age),r.history,toN(r.sI),toN(r.sJ),toN(r.sK),toN(r.sL),toN(r.sM),toN(r.sN),r.grade,r.opinion,r.addr,'',r.infoS,r.infoT]);
-  const ws=XLSX.utils.aoa_to_sheet([["시행년도","시행사 구분","권역구 구분"],[f.year,f.corp,f.region],[],cols,...rawDataArr]);
+  const ws=XLSX.utils.aoa_to_sheet([[null,"시행사 구분","권역구 구분"],[null,f.corp,f.region],[],cols,...rawDataArr]);
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'RawData');
   const wsV2=buildV2Sheet(f.rows,{year:f.year,corp:f.corp,region:f.region});
   XLSX.utils.book_append_sheet(wb,wsV2,'V2');
-  XLSX.writeFile(wb,'지하안전_갱신_'+f.name);
+  // ★ 파일명: X-Y-보고서.xlsx (corp, region 기반)
+  const expName=(f.corp&&f.region)
+    ? `${f.corp.replace(/㈜/g,'').trim()}-${f.region}-보고서.xlsx`
+    : ('지하안전_갱신_'+f.name);
+  XLSX.writeFile(wb,expName);
 }
 /* ── 전역: 연도 필터 ── */
 let yearFilter=new Set();
