@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>지하안전 관리시스템 v19.5</title>
+<title>지하안전 관리시스템 v19.6</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
@@ -322,7 +322,7 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
 
 <!-- 헤더 -->
 <header id="hdr">
-  <h1>🗺 지하안전 관리 <span style="font-weight:300;opacity:.5">v19.5</span></h1>
+  <h1>🗺 지하안전 관리 <span style="font-weight:300;opacity:.5">v19.6</span></h1>
   <div class="hbg">
     <!-- 라이트/다크 토글 -->
     <button class="btn bs hbtn" id="themeBtn" onclick="toggleTheme()" title="라이트/다크 전환">🌙</button>
@@ -1566,6 +1566,12 @@ async function generateReport(){
   const guchiUrl = document.getElementById('rptGuchiSel').value;
   const xlsxInfo = document.getElementById('rptXlsxSel').value;
   if(!hwpxUrl||!xlsxInfo){alert('hwpx 양식과 엑셀 파일을 모두 선택하세요.');return;}
+  // ★ 연도 드롭다운이 보이는데 선택 안 됐으면 경고
+  const _yearRowEl=document.getElementById('rptYearRow');
+  const _yearSelEl=document.getElementById('rptYearSel');
+  if(_yearRowEl&&_yearRowEl.style.display!=='none'&&_yearSelEl&&!_yearSelEl.value){
+    alert('보고서를 생성할 연도를 선택해주세요.');return;
+  }
 
   const [xlsxUrl, xlsxName] = xlsxInfo.split('|');
   const prog   = document.getElementById('rptProg');
@@ -1726,21 +1732,25 @@ async function onXlsxSelChange(){
     const resp=await fetch(xlsxUrl);
     const buffer=await resp.arrayBuffer();
     const wb=XLSX.read(new Uint8Array(buffer),{type:'array'});
-    const ws=wb.Sheets['V2']||wb.Sheets['RawData'];
+    // ★ RawData A열에서 연도 스캔 (V2 A열은 수식이라 캐시없으면 감지불가)
+    const ws=wb.Sheets['RawData']||wb.Sheets[wb.SheetNames[0]];
     if(!ws) return;
-    const range=XLSX.utils.decode_range(ws['!ref']||'A1:A100');
+    const range=XLSX.utils.decode_range(ws['!ref']||'A1:A500');
     const years=new Set();
-    for(let r=8;r<=range.e.r;r++){
+    for(let r=4;r<=range.e.r;r++){      // 5행(r=4)부터 데이터
       const a=XLSX.utils.encode_cell({r,c:0});
-      const v=ws[a]?String(ws[a].v??'').trim():'';
+      const cell=ws[a];
+      if(!cell) continue;
+      const v=String(cell.v??'').trim();
       if(/^20\d{2}$/.test(v)) years.add(v);
+      else if(v===''||(!isNaN(Number(v))&&Number(v)<100)) continue; // 순번이면 skip
+      else break;                       // 연도도 순번도 아닌 값이면 중단
     }
-    if(years.size>1){
+    if(years.size>=1){
+      // ★ 연도가 1개여도 드롭다운 표시 — 사용자가 연도 확인/선택 가능
       yearSel.innerHTML='<option value="">-- 연도를 선택하세요 --</option>'
         +[...years].sort().map(y=>`<option value="${y}">${y}년</option>`).join('');
       yearRow.style.display='block';
-    } else if(years.size===1){
-      yearSel.innerHTML=`<option value="${[...years][0]}">${[...years][0]}년 (자동감지)</option>`;
     }
   }catch(e){console.warn('연도 감지 실패:',e);}
 }
