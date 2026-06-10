@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>지하안전 관리시스템 v19.4</title>
+<title>지하안전 관리시스템 v19.5</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
@@ -322,7 +322,7 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
 
 <!-- 헤더 -->
 <header id="hdr">
-  <h1>🗺 지하안전 관리 <span style="font-weight:300;opacity:.5">v19.4</span></h1>
+  <h1>🗺 지하안전 관리 <span style="font-weight:300;opacity:.5">v19.5</span></h1>
   <div class="hbg">
     <!-- 라이트/다크 토글 -->
     <button class="btn bs hbtn" id="themeBtn" onclick="toggleTheme()" title="라이트/다크 전환">🌙</button>
@@ -1008,6 +1008,7 @@ document.addEventListener('click',e=>{if(!document.getElementById('sw').contains
 
 /* ── UI 렌더링 ── */
 function renderAll(){renderSidebar();renderTable('tbody','tr_',true);renderTable('tbody2','tr2_',false);renderMobileFileList();renderYearFilter();}
+function renderTablesOnly(){renderTable('tbody','tr_',true);renderTable('tbody2','tr2_',false);}
 
 function renderSidebar(){
   const fl=document.getElementById('flist');fl.innerHTML='';
@@ -1579,19 +1580,9 @@ async function generateReport(){
     if(!ri)throw new Error(`지원하지 않는 지역명: ${region}`);
     const[gw,sg]=ri;
     const sta=STA_MAP[`${operator}|${region}`]||'구간 정보 없음';
-    // ★ 연도: 드롭다운 선택값 우선 → 파일명 → 데이터 첫행에서 추출
     const selYear=document.getElementById('rptYearSel')?.value||'';
-    let year2=selYear?(selYear.length===4?selYear.slice(2):selYear):yearFromName;
-    let fullYear=selYear||(yearFromName?('20'+yearFromName):'');
-    // 파일명에 연도 없는 새 규칙 대응: data 첫행 연도 사용
-    if(!fullYear && data.length>0){
-      const dy=String(data[0][0]??'');  // V2 A열 첫 데이터 연도
-      if(/^20\d{2}$/.test(dy)){fullYear=dy;year2=dy.slice(2);}
-    }
-    if(!fullYear) fullYear=String(new Date().getFullYear());
-    if(!year2) year2=fullYear.slice(2);
 
-    // 2. 엑셀 V2 시트 읽기 (filterYear 전달)
+    // 2. 엑셀 먼저 읽기 → data 확보 후 연도 결정 (TDZ 방지)
     prog.textContent='📊 엑셀 데이터 읽는 중...';
     const xlsxResp   = await fetch(xlsxUrl);
     const xlsxBuffer = await xlsxResp.arrayBuffer();
@@ -1601,6 +1592,23 @@ async function generateReport(){
     const total=data.length;
     const lc={};
     for(const row of data){const l=String(row[COL.line]||'').trim();if(l)lc[l]=(lc[l]||0)+1;}
+
+    // ★ 연도 결정: 드롭다운 → 파일명 → RawData A열 직접 추출
+    let year2=selYear?(selYear.length===4?selYear.slice(2):selYear):yearFromName;
+    let fullYear=selYear||(yearFromName?('20'+yearFromName):'');
+    if(!fullYear){
+      const rawWsY=wb.Sheets['RawData'];
+      if(rawWsY){
+        for(let ri=4;ri<100;ri++){
+          const yc=rawWsY[XLSX.utils.encode_cell({r:ri,c:0})];
+          if(yc&&yc.v&&/^20\d{2}$/.test(String(yc.v).trim())){
+            fullYear=String(yc.v).trim();year2=fullYear.slice(2);break;
+          }
+        }
+      }
+    }
+    if(!fullYear) fullYear=String(new Date().getFullYear());
+    if(!year2) year2=fullYear.slice(2);
 
     // 3. hwpx 양식 파일 열기
     prog.textContent='📄 hwpx 파일 불러오는 중...';
@@ -1792,7 +1800,7 @@ function applyYearFilter(){
       markerMap.get(mk).setMap(yearOk?map:null);
     });
   });
-  renderAll();
+  renderTablesOnly();   // ★ 체크박스 재생성 없이 테이블만 갱신
   updateYearBadge();
 }
 function updateYearBadge(){
