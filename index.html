@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>지하안전 관리시스템 v19.9</title>
+<title>지하안전 관리시스템 v20.0</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
@@ -322,7 +322,7 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
 
 <!-- 헤더 -->
 <header id="hdr">
-  <h1>🗺 지하안전 관리 <span style="font-weight:300;opacity:.5">v19.9</span></h1>
+  <h1>🗺 지하안전 관리 <span style="font-weight:300;opacity:.5">v20.0</span></h1>
   <div class="hbg">
     <!-- 라이트/다크 토글 -->
     <button class="btn bs hbtn" id="themeBtn" onclick="toggleTheme()" title="라이트/다크 전환">🌙</button>
@@ -409,19 +409,25 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
       <div id="map">
         <div id="cbadge">📍 지도를 클릭하여 새 지점 추가</div>
         <div id="gbadge">🔄 주소 변환 중 <span id="gcnt">0</span>건</div>
-        <!-- 연도 필터 패널 -->
+        <!-- 연도 필터 + 마커 조회 패널 -->
         <div id="yearPanel" style="position:absolute;bottom:130px;right:10px;
              background:rgba(10,15,26,.92);border:1px solid var(--bor);
              border-radius:8px;padding:9px 12px;z-index:200;
-             font-size:11px;backdrop-filter:blur(6px);min-width:120px;">
+             font-size:11px;backdrop-filter:blur(6px);min-width:140px;">
           <div style="color:var(--acc);font-weight:700;margin-bottom:6px;font-size:11px;">
             📅 연도 필터
             <span id="yearBadge" style="margin-left:6px;background:var(--acc);color:#000;
               font-size:9px;font-weight:700;padding:2px 6px;border-radius:10px;">전체</span>
           </div>
-          <div id="yearFilterWrap" style="display:flex;flex-direction:column;gap:4px;">
+          <div id="yearFilterWrap" style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px;">
             <span style="color:#6b7280;font-size:10px">파일 불러오면 연도 표시</span>
           </div>
+          <button id="applyMarkersBtn" onclick="applyMarkers()"
+            style="width:100%;padding:7px 0;font-size:12px;font-weight:700;
+                   background:var(--acc);color:#000;border:none;border-radius:6px;
+                   cursor:pointer;transition:.15s;">
+            🗺 마커 조회
+          </button>
         </div>
         <div id="leg">
           <div class="lt">범 례</div>
@@ -446,9 +452,15 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
 
       <!-- 연도 필터 (모바일) -->
       <div class="msl">📅 연도 필터</div>
-      <div id="mYearFilterWrap" style="display:flex;flex-wrap:wrap;gap:5px;padding:2px 0 8px;">
+      <div id="mYearFilterWrap" style="display:flex;flex-wrap:wrap;gap:5px;padding:2px 0 6px;">
         <span style="color:#6b7280;font-size:11px">파일 불러오면 표시</span>
       </div>
+      <button onclick="applyMarkers();if(window.innerWidth<768)switchTab(0);"
+        style="width:100%;padding:10px 0;font-size:13px;font-weight:700;
+               background:var(--acc);color:#000;border:none;border-radius:7px;
+               cursor:pointer;margin-bottom:8px;">
+        🗺 마커 조회
+      </button>
 
       <div class="msl" style="margin-top:14px">🐙 GitHub 파일</div>
       <div id="mGhList" style="font-size:11px;color:#9ca3af;text-align:center;padding:6px 0;">
@@ -826,13 +838,9 @@ function processSheet(sheet,name){
   files[fid]={name,year:fileYear,corp,region,rows,visible:true};
   activeFileId=fid;
   setDirty(false);
-  renderAll();          // renderYearFilter 포함
-  // ★ 지오코딩 전에 yearFilter가 이미 설정된 경우
-  //   placeMarker 내부에서 yearFilter 체크하므로 별도 처리 불필요
-  //   단, 새 파일 로드 시 yearFilter는 유지 (사용자가 미리 선택한 연도 존중)
-  rows.forEach((_,idx)=>geoQ.push({fid,rowIdx:idx}));
-  updateGBadge();
-  if(kakaoReady&&!geoRunning) runGeoQueue();
+  renderAll();  // renderYearFilter 포함 → 체크박스 갱신
+  // ★ 파일 로드 시 지오코딩/마커 표시 하지 않음
+  //   사용자가 연도 체크 후 [마커 조회] 버튼으로 직접 실행
 }
 
 /* ── GitHub 파일 목록 ── */
@@ -945,14 +953,9 @@ async function saveToGitHub(){
 function placeMarker(fid,key,row){
   if(!map||!row.geoOk||row.lat===null) return;
   const mk=fid+':'+key;
-  // ★ yearFilter: 빈Set=전체표시, 아니면 선택된 연도만
-  const yearOk = yearFilter.size===0 || yearFilter.has(String(row.year));
-  const targetMap = yearOk ? map : null;
-  // 기존 마커: 위치 + 가시성 갱신
+  // 기존 마커: 위치 갱신
   if(markerMap.has(mk)){
-    const ov=markerMap.get(mk);
-    ov.setPosition(new kakao.maps.LatLng(row.lat,row.lng));
-    ov.setMap(targetMap);
+    markerMap.get(mk).setPosition(new kakao.maps.LatLng(row.lat,row.lng));
     return;
   }
   // 신규 마커 생성
@@ -966,7 +969,7 @@ function placeMarker(fid,key,row){
   dot.ontouchstart=e=>{e.stopPropagation();tip.style.display=tip.style.display==='block'?'none':'block';};
   dot.onclick=()=>{if(window.innerWidth<768) switchTab(2);setTimeout(()=>{const tr=document.getElementById('tr_'+CSS.escape(mk));if(tr){tr.scrollIntoView({block:'center',behavior:'smooth'});tr.classList.add('hl');setTimeout(()=>tr.classList.remove('hl'),1500);}},100);};
   const ov=new kakao.maps.CustomOverlay({position:new kakao.maps.LatLng(row.lat,row.lng),content:wrap,zIndex:gc==='urg'?3:gc==='pri'?2:1});
-  ov.setMap(targetMap); // yearFilter 적용
+  ov.setMap(map);
   markerMap.set(mk,ov);
 }
 function setFileVisible(fid,visible){
@@ -1806,6 +1809,57 @@ function getAvailableYears(){
   Object.values(files).forEach(f=>f.rows.forEach(r=>{if(r.year)ys.add(String(r.year));}));
   return[...ys].sort();
 }
+/* ══ 마커 조회: 선택 연도만 지오코딩 → 마커 표시 ══ */
+function applyMarkers(){
+  if(!kakaoReady){alert('지도가 준비되지 않았습니다.');return;}
+  if(!activeFileId&&Object.keys(files).length===0){
+    alert('먼저 엑셀 파일을 불러오세요.');return;
+  }
+
+  // 1. 기존 마커 전체 지도에서 제거 + markerMap 초기화
+  markerMap.forEach(ov=>ov.setMap(null));
+  markerMap.clear();
+
+  // 2. geoQ 초기화 (진행 중인 큐 비우기)
+  geoQ.length=0;
+  geoRunning=false;
+
+  // 3. 현재 yearFilter 기준으로 표시할 행만 geoQ 등록
+  const selectedYears=yearFilter.size===0
+    ? null   // 빈Set = 전체
+    : yearFilter;
+
+  let queued=0;
+  Object.entries(files).forEach(([fid,f])=>{
+    if(!f.visible) return;
+    f.rows.forEach((row,idx)=>{
+      const yearOk=!selectedYears||selectedYears.has(String(row.year));
+      if(!yearOk) return;
+      // 이미 좌표가 있으면 geoQ 없이 바로 마커 생성
+      if(row.geoOk&&row.lat!==null){
+        placeMarker(fid,row._key,row);
+      } else {
+        geoQ.push({fid,rowIdx:idx});
+        queued++;
+      }
+    });
+  });
+
+  updateGBadge();
+  if(queued>0) runGeoQueue();
+
+  // 버튼 피드백
+  const btn=document.getElementById('applyMarkersBtn');
+  if(btn){
+    btn.textContent='⏳ 조회 중...';
+    btn.style.background='var(--yel)';btn.style.color='#000';
+    setTimeout(()=>{
+      btn.textContent='🗺 마커 조회';
+      btn.style.background='';btn.style.color='';
+    },Math.max(1500,queued*350));
+  }
+}
+
 function resetYearFilter(){
   yearFilter=new Set(); // 전체표시
   // 모든 체크박스 checked
@@ -1826,24 +1880,17 @@ function applyYearFilter(){
   const selected=[];
   checks.forEach(ck=>{if(ck.checked)selected.push(ck.value);});
   const allYears=getAvailableYears();
-
-  // ★ 전체선택이면 빈Set(전체표시), 일부/전체해제면 선택된 것만
-  yearFilter = (selected.length===allYears.length && allYears.length>0)
-    ? new Set()           // 전체선택 → 필터 없음(전체표시)
-    : new Set(selected);  // 일부선택 or 전체해제 → 선택된 연도만(없으면 0개)
-
-  // ★ markerMap 전체 순회: 즉시 반영 (geoQueue 진행 중이어도)
-  //    이후 지오코딩 완료되는 마커는 placeMarker 내부에서 yearFilter 적용
-  Object.entries(files).forEach(([fid,f])=>{
-    f.rows.forEach(row=>{
-      const mk=fid+':'+row._key;
-      if(!markerMap.has(mk)) return;
-      const yearOk = yearFilter.size===0 || yearFilter.has(String(row.year));
-      markerMap.get(mk).setMap((f.visible && yearOk) ? map : null);
-    });
-  });
+  // yearFilter 값만 업데이트 — 마커는 [마커 조회] 버튼으로만 변경
+  yearFilter=(selected.length===allYears.length&&allYears.length>0)
+    ?new Set():new Set(selected);
   renderTablesOnly();
   updateYearBadge();
+  // 연도 배지 색상으로 "조회 필요" 안내
+  const btn=document.getElementById('applyMarkersBtn');
+  if(btn){
+    btn.style.animation='pulse .8s infinite';
+    btn.title='연도가 변경되었습니다. 마커 조회를 다시 눌러주세요.';
+  }
 }
 function updateYearBadge(){
   const badge=document.getElementById('yearBadge');
