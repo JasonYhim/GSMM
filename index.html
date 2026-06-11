@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>지하안전 관리시스템 v19.6</title>
+<title>지하안전 관리시스템 v19.7</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
@@ -322,7 +322,7 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
 
 <!-- 헤더 -->
 <header id="hdr">
-  <h1>🗺 지하안전 관리 <span style="font-weight:300;opacity:.5">v19.6</span></h1>
+  <h1>🗺 지하안전 관리 <span style="font-weight:300;opacity:.5">v19.7</span></h1>
   <div class="hbg">
     <!-- 라이트/다크 토글 -->
     <button class="btn bs hbtn" id="themeBtn" onclick="toggleTheme()" title="라이트/다크 전환">🌙</button>
@@ -566,6 +566,7 @@ let activeFileId=null;
 const markerMap=new Map();
 let srchOv=null,srchCi=null,clickMode=false;
 const geoQ=[];let geoRunning=false;
+let yearFilter=new Set(); // 연도 필터: 빈Set=전체표시
 
 /* 편집 모드 (데이터탭) */
 let editMode=false;
@@ -827,7 +828,10 @@ function processSheet(sheet,name){
   files[fid]={name,year:fileYear,corp,region,rows,visible:true};
   activeFileId=fid;
   setDirty(false);
-  renderAll();
+  renderAll();          // renderYearFilter 포함
+  // ★ 지오코딩 전에 yearFilter가 이미 설정된 경우
+  //   placeMarker 내부에서 yearFilter 체크하므로 별도 처리 불필요
+  //   단, 새 파일 로드 시 yearFilter는 유지 (사용자가 미리 선택한 연도 존중)
   rows.forEach((_,idx)=>geoQ.push({fid,rowIdx:idx}));
   updateGBadge();
   if(kakaoReady&&!geoRunning) runGeoQueue();
@@ -963,7 +967,9 @@ function setFileVisible(fid,visible){
   f.rows.forEach(row=>{
     const mk=fid+':'+row._key;
     if(!markerMap.has(mk)) return;
-    const yearOk=yearFilter.size===0||yearFilter.has(String(row.year));
+    const yearOk = yearFilter.size===0
+      ? true
+      : yearFilter.has(String(row.year));
     markerMap.get(mk).setMap((visible&&yearOk)?map:null);
   });
 }
@@ -1772,9 +1778,6 @@ function exportXlsx(){
     : ('지하안전_갱신_'+f.name);
   XLSX.writeFile(wb,expName);
 }
-/* ── 전역: 연도 필터 ── */
-let yearFilter=new Set();
-
 /* ── 라이트/다크 토글 ── */
 function toggleTheme(){
   const isLight=document.body.classList.toggle('light');
@@ -1795,22 +1798,45 @@ function getAvailableYears(){
   Object.values(files).forEach(f=>f.rows.forEach(r=>{if(r.year)ys.add(String(r.year));}));
   return[...ys].sort();
 }
+function resetYearFilter(){
+  yearFilter=new Set(); // 전체표시
+  // 모든 체크박스 checked
+  document.querySelectorAll('.yf-chk').forEach(ck=>ck.checked=true);
+  // 모든 마커 다시 표시
+  Object.entries(files).forEach(([fid,f])=>{
+    if(!f.visible) return;
+    f.rows.forEach(row=>{
+      const mk=fid+':'+row._key;
+      if(markerMap.has(mk)) markerMap.get(mk).setMap(map);
+    });
+  });
+  renderTablesOnly();
+  updateYearBadge();
+}
 function applyYearFilter(){
   const checks=document.querySelectorAll('.yf-chk');
   const selected=[];
-  checks.forEach(c=>{if(c.checked)selected.push(c.value);});
+  checks.forEach(ck=>{if(ck.checked)selected.push(ck.value);});
   const allYears=getAvailableYears();
-  yearFilter=(selected.length===0||selected.length===allYears.length)?new Set():new Set(selected);
+
+  // ★ 전체선택이면 빈Set(전체표시), 일부/전체해제면 선택된 것만
+  yearFilter = (selected.length===allYears.length && allYears.length>0)
+    ? new Set()           // 전체선택 → 필터 없음(전체표시)
+    : new Set(selected);  // 일부선택 or 전체해제 → 선택된 연도만(없으면 0개)
+
+  // ★ 마커 가시성 갱신
   Object.entries(files).forEach(([fid,f])=>{
     if(!f.visible) return;
     f.rows.forEach(row=>{
       const mk=fid+':'+row._key;
       if(!markerMap.has(mk)) return;
-      const yearOk=yearFilter.size===0||yearFilter.has(String(row.year));
-      markerMap.get(mk).setMap(yearOk?map:null);
+      const yearOk = yearFilter.size===0
+        ? true                              // 전체표시
+        : yearFilter.has(String(row.year)); // 선택된 연도만
+      markerMap.get(mk).setMap(yearOk ? map : null);
     });
   });
-  renderTablesOnly();   // ★ 체크박스 재생성 없이 테이블만 갱신
+  renderTablesOnly();
   updateYearBadge();
 }
 function updateYearBadge(){
@@ -1824,7 +1850,7 @@ function renderYearFilter(){
   ['yearFilterWrap','sideYearFilterWrap','mYearFilterWrap'].forEach(id=>{
     const el=document.getElementById(id);if(!el) return;
     if(allYears.length===0){el.innerHTML='<span style="color:#6b7280;font-size:10px">파일 불러오면 연도 표시</span>';return;}
-    el.innerHTML=allYears.map(y=>`<label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;background:var(--s2);border:1px solid var(--bor);border-radius:5px;padding:4px 8px;user-select:none;"><input type="checkbox" class="yf-chk" value="${y}" ${yearFilter.size===0||yearFilter.has(y)?'checked':''} onchange="applyYearFilter()">${y}년</label>`).join('');
+    el.innerHTML=allYears.map(y=>`<label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;background:var(--s2);border:1px solid var(--bor);border-radius:5px;padding:4px 8px;user-select:none;"><input type="checkbox" class="yf-chk" value="${y}" ${yearFilter.size===0||yearFilter.has(y)?'checked':''} onchange="applyYearFilter()">${y}년</label>`).join('')+'<button onclick="resetYearFilter()" style="font-size:10px;padding:3px 7px;background:var(--s2);border:1px solid var(--bor);border-radius:4px;color:#9ca3af;cursor:pointer;margin-top:2px;">전체</button>';
   });
   updateYearBadge();
 }
