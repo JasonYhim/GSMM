@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>지하안전 관리시스템 v20.0</title>
+<title>지하안전 관리시스템 v20.1</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
@@ -322,7 +322,7 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
 
 <!-- 헤더 -->
 <header id="hdr">
-  <h1>🗺 지하안전 관리 <span style="font-weight:300;opacity:.5">v20.0</span></h1>
+  <h1>🗺 지하안전 관리 <span style="font-weight:300;opacity:.5">v20.1</span></h1>
   <div class="hbg">
     <!-- 라이트/다크 토글 -->
     <button class="btn bs hbtn" id="themeBtn" onclick="toggleTheme()" title="라이트/다크 전환">🌙</button>
@@ -808,10 +808,21 @@ function processSheet(sheet,name){
     const v0=String(r0[0]??'').trim();
     if(!v0) continue;
     if(/^20\d{2}$/.test(v0)){psOffset=1;metaYear=v0;}  // 새 구조: A열=연도
-    else metaYear=String(all[1]?.[0]||new Date().getFullYear()); // 구버전
+    else {
+      // 구버전: 파일명에서 연도 추출 시도 (예: "25-경기철도-성남시.xlsx" → "2025")
+      const ynm=name.replace(/^지하안전_갱신_/,'').match(/^(\d{2})-/);
+      if(ynm) metaYear='20'+ynm[1];
+      // 파일명에 없으면 A2셀(all[1][0]) 확인
+      else {
+        const a2=String(all[1]?.[0]??'').trim();
+        if(/^20\d{2}$/.test(a2)) metaYear=a2;
+        else if(/^\d{2}$/.test(a2)) metaYear='20'+a2;
+      }
+    }
     break;
   }
-  const fileYear=metaYear||String(new Date().getFullYear());
+  // ★ 연도 미확인 시 '미확인'으로 표시 (현재연도로 대체 금지 → 오필터 방지)
+  const fileYear=metaYear||'미확인';
   for(let i=4;i<all.length;i++){
     const r=all[i];
     const rv=r[psOffset];                          // 순번 위치
