@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>지하안전 관리시스템 v19.7</title>
+<title>지하안전 관리시스템 v19.8</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
@@ -322,7 +322,7 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
 
 <!-- 헤더 -->
 <header id="hdr">
-  <h1>🗺 지하안전 관리 <span style="font-weight:300;opacity:.5">v19.7</span></h1>
+  <h1>🗺 지하안전 관리 <span style="font-weight:300;opacity:.5">v19.8</span></h1>
   <div class="hbg">
     <!-- 라이트/다크 토글 -->
     <button class="btn bs hbtn" id="themeBtn" onclick="toggleTheme()" title="라이트/다크 전환">🌙</button>
@@ -946,9 +946,19 @@ async function saveToGitHub(){
 /* ── 마커 관리 ── */
 function placeMarker(fid,key,row){
   if(!map||!row.geoOk||row.lat===null) return;
-  if(yearFilter.size>0&&!yearFilter.has(String(row.year))) return;
   const mk=fid+':'+key;
-  if(markerMap.has(mk)){markerMap.get(mk).setPosition(new kakao.maps.LatLng(row.lat,row.lng));return;}
+  const yearOk = yearFilter.size===0 || yearFilter.has(String(row.year));
+  // ★ 이미 마커가 있으면: yearFilter에 따라 표시/숨김 처리 후 return
+  if(markerMap.has(mk)){
+    const ov=markerMap.get(mk);
+    ov.setPosition(new kakao.maps.LatLng(row.lat,row.lng));
+    ov.setMap(yearOk ? map : null);
+    return;
+  }
+  // ★ 새 마커 생성: yearFilter 밖이면 생성은 하되 지도에 올리지 않음
+  if(!yearOk){
+    // 위치만 저장해두고 마커는 숨김 상태로 생성
+  }
   const gc=row.grade==='긴급'?'urg':row.grade==='우선'?'pri':'gen';
   const wrap=document.createElement('div');wrap.className='mw';wrap.style.position='relative';
   const dot=document.createElement('div');dot.className='mc '+gc;dot.textContent=row.seq;
@@ -959,7 +969,9 @@ function placeMarker(fid,key,row){
   dot.ontouchstart=e=>{e.stopPropagation();tip.style.display=tip.style.display==='block'?'none':'block';};
   dot.onclick=()=>{if(window.innerWidth<768) switchTab(2);setTimeout(()=>{const tr=document.getElementById('tr_'+CSS.escape(mk));if(tr){tr.scrollIntoView({block:'center',behavior:'smooth'});tr.classList.add('hl');setTimeout(()=>tr.classList.remove('hl'),1500);}},100);};
   const ov=new kakao.maps.CustomOverlay({position:new kakao.maps.LatLng(row.lat,row.lng),content:wrap,zIndex:gc==='urg'?3:gc==='pri'?2:1});
-  ov.setMap(map); markerMap.set(mk,ov);
+  // ★ yearFilter에 따라 지도에 올릴지 결정
+  ov.setMap(yearOk ? map : null);
+  markerMap.set(mk,ov);
 }
 function setFileVisible(fid,visible){
   const f=files[fid];if(!f) return;
@@ -1802,12 +1814,12 @@ function resetYearFilter(){
   yearFilter=new Set(); // 전체표시
   // 모든 체크박스 checked
   document.querySelectorAll('.yf-chk').forEach(ck=>ck.checked=true);
-  // 모든 마커 다시 표시
+  // 모든 마커 다시 표시 (visible인 파일만)
   Object.entries(files).forEach(([fid,f])=>{
-    if(!f.visible) return;
     f.rows.forEach(row=>{
       const mk=fid+':'+row._key;
-      if(markerMap.has(mk)) markerMap.get(mk).setMap(map);
+      if(markerMap.has(mk))
+        markerMap.get(mk).setMap(f.visible ? map : null);
     });
   });
   renderTablesOnly();
@@ -1824,16 +1836,17 @@ function applyYearFilter(){
     ? new Set()           // 전체선택 → 필터 없음(전체표시)
     : new Set(selected);  // 일부선택 or 전체해제 → 선택된 연도만(없으면 0개)
 
-  // ★ 마커 가시성 갱신
+  // ★ markerMap 전체 순회: files 가시성 + yearFilter 동시 적용
   Object.entries(files).forEach(([fid,f])=>{
-    if(!f.visible) return;
     f.rows.forEach(row=>{
       const mk=fid+':'+row._key;
       if(!markerMap.has(mk)) return;
       const yearOk = yearFilter.size===0
-        ? true                              // 전체표시
-        : yearFilter.has(String(row.year)); // 선택된 연도만
-      markerMap.get(mk).setMap(yearOk ? map : null);
+        ? true
+        : yearFilter.has(String(row.year));
+      // 파일 자체가 숨겨져 있으면 연도와 무관하게 숨김
+      const show = f.visible && yearOk;
+      markerMap.get(mk).setMap(show ? map : null);
     });
   });
   renderTablesOnly();
