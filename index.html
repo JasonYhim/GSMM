@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>지하안전 관리시스템 v19.8</title>
+<title>지하안전 관리시스템 v19.9</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
@@ -322,7 +322,7 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
 
 <!-- 헤더 -->
 <header id="hdr">
-  <h1>🗺 지하안전 관리 <span style="font-weight:300;opacity:.5">v19.8</span></h1>
+  <h1>🗺 지하안전 관리 <span style="font-weight:300;opacity:.5">v19.9</span></h1>
   <div class="hbg">
     <!-- 라이트/다크 토글 -->
     <button class="btn bs hbtn" id="themeBtn" onclick="toggleTheme()" title="라이트/다크 전환">🌙</button>
@@ -385,14 +385,6 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
         </button>
         <div id="ghList" style="font-size:11px;color:#9ca3af;text-align:center;padding:4px 0;">
           위 버튼으로 불러오세요
-        </div>
-      </div>
-
-      <!-- 연도 필터 (사이드바) -->
-      <div class="sec">
-        <div class="sl">📅 연도 필터</div>
-        <div id="sideYearFilterWrap" style="display:flex;flex-wrap:wrap;gap:4px;padding:2px 0;">
-          <span style="color:#6b7280;font-size:10px">파일 불러오면 표시</span>
         </div>
       </div>
 
@@ -700,8 +692,14 @@ async function runGeoQueue(){
     const f=files[fid]; if(!f) continue;
     const row=f.rows[rowIdx];
     const res=await geocodeAddr(row.addr);
-    if(res){row.lat=res.lat;row.lng=res.lng;row.geoOk=true;updateQCell(fid,row._key,true);if(f.visible)placeMarker(fid,row._key,row);}
-    else{row.geoOk=false;updateQCell(fid,row._key,false);}
+    if(res){
+      row.lat=res.lat;row.lng=res.lng;row.geoOk=true;
+      updateQCell(fid,row._key,true);
+      // ★ 좌표 저장 후 마커 즉시 생성 (yearFilter 적용하여 숨김/표시 결정)
+      if(f.visible) placeMarker(fid,row._key,row);
+    } else {
+      row.geoOk=false;updateQCell(fid,row._key,false);
+    }
     await new Promise(r=>setTimeout(r,300));
   }
   geoRunning=false; updateGBadge();
@@ -947,18 +945,17 @@ async function saveToGitHub(){
 function placeMarker(fid,key,row){
   if(!map||!row.geoOk||row.lat===null) return;
   const mk=fid+':'+key;
+  // ★ yearFilter: 빈Set=전체표시, 아니면 선택된 연도만
   const yearOk = yearFilter.size===0 || yearFilter.has(String(row.year));
-  // ★ 이미 마커가 있으면: yearFilter에 따라 표시/숨김 처리 후 return
+  const targetMap = yearOk ? map : null;
+  // 기존 마커: 위치 + 가시성 갱신
   if(markerMap.has(mk)){
     const ov=markerMap.get(mk);
     ov.setPosition(new kakao.maps.LatLng(row.lat,row.lng));
-    ov.setMap(yearOk ? map : null);
+    ov.setMap(targetMap);
     return;
   }
-  // ★ 새 마커 생성: yearFilter 밖이면 생성은 하되 지도에 올리지 않음
-  if(!yearOk){
-    // 위치만 저장해두고 마커는 숨김 상태로 생성
-  }
+  // 신규 마커 생성
   const gc=row.grade==='긴급'?'urg':row.grade==='우선'?'pri':'gen';
   const wrap=document.createElement('div');wrap.className='mw';wrap.style.position='relative';
   const dot=document.createElement('div');dot.className='mc '+gc;dot.textContent=row.seq;
@@ -969,8 +966,7 @@ function placeMarker(fid,key,row){
   dot.ontouchstart=e=>{e.stopPropagation();tip.style.display=tip.style.display==='block'?'none':'block';};
   dot.onclick=()=>{if(window.innerWidth<768) switchTab(2);setTimeout(()=>{const tr=document.getElementById('tr_'+CSS.escape(mk));if(tr){tr.scrollIntoView({block:'center',behavior:'smooth'});tr.classList.add('hl');setTimeout(()=>tr.classList.remove('hl'),1500);}},100);};
   const ov=new kakao.maps.CustomOverlay({position:new kakao.maps.LatLng(row.lat,row.lng),content:wrap,zIndex:gc==='urg'?3:gc==='pri'?2:1});
-  // ★ yearFilter에 따라 지도에 올릴지 결정
-  ov.setMap(yearOk ? map : null);
+  ov.setMap(targetMap); // yearFilter 적용
   markerMap.set(mk,ov);
 }
 function setFileVisible(fid,visible){
@@ -1836,17 +1832,14 @@ function applyYearFilter(){
     ? new Set()           // 전체선택 → 필터 없음(전체표시)
     : new Set(selected);  // 일부선택 or 전체해제 → 선택된 연도만(없으면 0개)
 
-  // ★ markerMap 전체 순회: files 가시성 + yearFilter 동시 적용
+  // ★ markerMap 전체 순회: 즉시 반영 (geoQueue 진행 중이어도)
+  //    이후 지오코딩 완료되는 마커는 placeMarker 내부에서 yearFilter 적용
   Object.entries(files).forEach(([fid,f])=>{
     f.rows.forEach(row=>{
       const mk=fid+':'+row._key;
       if(!markerMap.has(mk)) return;
-      const yearOk = yearFilter.size===0
-        ? true
-        : yearFilter.has(String(row.year));
-      // 파일 자체가 숨겨져 있으면 연도와 무관하게 숨김
-      const show = f.visible && yearOk;
-      markerMap.get(mk).setMap(show ? map : null);
+      const yearOk = yearFilter.size===0 || yearFilter.has(String(row.year));
+      markerMap.get(mk).setMap((f.visible && yearOk) ? map : null);
     });
   });
   renderTablesOnly();
@@ -1860,7 +1853,7 @@ function updateYearBadge(){
 }
 function renderYearFilter(){
   const allYears=getAvailableYears();
-  ['yearFilterWrap','sideYearFilterWrap','mYearFilterWrap'].forEach(id=>{
+  ['yearFilterWrap','mYearFilterWrap'].forEach(id=>{
     const el=document.getElementById(id);if(!el) return;
     if(allYears.length===0){el.innerHTML='<span style="color:#6b7280;font-size:10px">파일 불러오면 연도 표시</span>';return;}
     el.innerHTML=allYears.map(y=>`<label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;background:var(--s2);border:1px solid var(--bor);border-radius:5px;padding:4px 8px;user-select:none;"><input type="checkbox" class="yf-chk" value="${y}" ${yearFilter.size===0||yearFilter.has(y)?'checked':''} onchange="applyYearFilter()">${y}년</label>`).join('')+'<button onclick="resetYearFilter()" style="font-size:10px;padding:3px 7px;background:var(--s2);border:1px solid var(--bor);border-radius:4px;color:#9ca3af;cursor:pointer;margin-top:2px;">전체</button>';
