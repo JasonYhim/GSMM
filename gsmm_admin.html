@@ -175,6 +175,14 @@ table.t tr:last-child td{border-bottom:none}
 /* ── empty state ── */
 .empty{text-align:center;padding:32px;color:var(--hint);font-size:13px}
 
+/* ── year filter ── */
+.yf-btn{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:20px;
+        font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid var(--bor);
+        background:var(--s2);color:var(--sub);transition:.15s;user-select:none}
+.yf-btn:hover{border-color:var(--acc)}
+.yf-btn.on{background:rgba(0,198,255,.12);border-color:var(--acc);color:var(--acc)}
+.yf-btn.on::before{content:'✓ ';font-size:10px}
+
 /* ── mobile ── */
 @media(max-width:767px){
   .hdr{padding:8px 12px;gap:10px}
@@ -296,6 +304,17 @@ table.t tr:last-child td{border-bottom:none}
 
   <!-- ═══ 데이터 분석 ═══ -->
   <div class="panel" id="p-analysis">
+    <!-- 연도 필터 -->
+    <div class="card" style="padding:12px 20px">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <span style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px">📅 연도 필터</span>
+        <div id="yearFilterArea" style="display:flex;gap:6px;flex-wrap:wrap;flex:1">
+          <span style="font-size:12px;color:var(--hint)">엑셀 분석 후 표시됩니다</span>
+        </div>
+        <span style="font-size:10px;color:var(--hint)">최대 5개년</span>
+      </div>
+    </div>
+
     <div class="card">
       <div class="card-hdr"><div class="card-title"><span class="icon">📊</span> 과년도 대비 조사 데이터 현황</div>
         <span class="badge b-info" id="analysisChartBadge">로딩 중</span></div>
@@ -304,7 +323,8 @@ table.t tr:last-child td{border-bottom:none}
 
     <div class="grid2">
       <div class="card">
-        <div class="card-hdr"><div class="card-title"><span class="icon">🎯</span> 평가등급 분포</div></div>
+        <div class="card-hdr"><div class="card-title"><span class="icon">🎯</span> 평가등급 분포</div>
+          <span class="badge b-info" id="gradeBadge">-</span></div>
         <div id="gradeChart"><div class="loading"><span class="spin"></span>분석 중...</div></div>
       </div>
       <div class="card">
@@ -357,8 +377,9 @@ const REGIONS=[
 ];
 
 // GSMM에서 활발히 사용하는 파일 패턴 (현시 중 판별)
+// 구버전: 25-신분당-강남구.xlsx  /  새버전: 경기철도-용인시-보고서.xlsx
 function isActiveFile(name){
-  return /^\d{2}-[가-힣]+-[가-힣]+.*\.xlsx$/i.test(name);
+  return /^(\d{2}-)?[가-힣]+-[가-힣]+.*\.xlsx$/i.test(name);
 }
 
 /* ── PAT 관리 ── */
@@ -425,8 +446,37 @@ document.querySelectorAll('.tab').forEach(tab=>{
 let ghFiles=[];       // GitHub 파일 목록
 let ghCommits=[];     // 커밋 목록
 let ghRepoInfo=null;  // 리포 정보
-let xlsxData={};      // {파일명: {year,operator,region,rowCount,grades,integ}}
+let xlsxData={};      // {파일명: {operator,region,yearData:{연도:{count,grades}},integ}}
 let rateLimit={remaining:'-',limit:'-',reset:null};
+
+/* ═══ 연도 필터 ═══ */
+let allAvailableYears=[];   // 전체 사용 가능 연도 ['2025','2026',...]
+let selectedYears=null;     // Set — 선택된 연도들 (최대 5)
+
+function getAllYears(){
+  const ys=new Set();
+  Object.values(xlsxData).forEach(d=>{
+    Object.keys(d.yearData).forEach(y=>{if(y!=='미확인') ys.add(y);});
+  });
+  return[...ys].sort();
+}
+function getFilteredYearData(){
+  // selectedYears 기준으로 {operator,region,year} → count/grades 플랫 배열
+  const result=[];
+  Object.values(xlsxData).forEach(d=>{
+    Object.entries(d.yearData).forEach(([yr,yd])=>{
+      if(selectedYears&&!selectedYears.has(yr)) return;
+      result.push({operator:d.operator,region:d.region,year:yr,...yd});
+    });
+  });
+  return result;
+}
+function toggleYear(yr){
+  if(!selectedYears) selectedYears=new Set(allAvailableYears);
+  if(selectedYears.has(yr)) selectedYears.delete(yr);
+  else if(selectedYears.size<5) selectedYears.add(yr);
+  renderAnalysis();
+}
 
 /* ═══ 전체 새로고침 ═══ */
 async function refreshAll(){
@@ -529,6 +579,7 @@ function updateRateLimit(headers){
 /* ═══ 엑셀 파일 분석 ═══ */
 async function analyzeExcelFiles(){
   xlsxData={};
+  selectedYears=null; // 리셋
   const xlsxFiles=ghFiles.filter(f=>f.name.endsWith('.xlsx')||f.name.endsWith('.xls'));
   for(const file of xlsxFiles){
     try{
@@ -548,40 +599,69 @@ async function analyzeExcelFiles(){
       const sheet=wb.Sheets['RawData']||wb.Sheets[wb.SheetNames[0]];
       const rows=sheet?XLSX.utils.sheet_to_json(sheet,{header:1,defval:''}):[];
 
-      // 데이터 행 수 (6행부터)
-      let dataCount=0;
-      const grades={일반:0,우선:0,긴급:0};
-      let emptyAddr=0;
-      let colCount=0;
+      // ★ psOffset 자동 감지 (index.html processSheet 로직과 동일)
+      let psOffset=0, metaYear='';
+      for(let i=3;i<rows.length;i++){
+        const v0=String(rows[i]?.[0]??'').trim();
+        if(!v0) continue;
+        if(isNaN(Number(v0))) continue;
+        if(/^20\d{2}$/.test(v0)){
+          psOffset=1; metaYear=v0;
+        } else {
+          psOffset=0;
+          // 파일명에서 연도 추출 (구버전 호환)
+          const ynm=file.name.replace(/^지하안전_갱신_/,'').match(/^(\d{2})-/);
+          if(ynm) metaYear='20'+ynm[1];
+        }
+        break;
+      }
+      if(!metaYear){
+        const a2=String(rows[1]?.[0]??'').trim();
+        if(/^20\d{2}$/.test(a2)) metaYear=a2;
+        else if(/^\d{2}$/.test(a2)) metaYear='20'+a2;
+      }
+      const fileYear=metaYear||parsed.yearHint||'미확인';
 
+      // 컬럼 수 검사
+      let colCount=0;
       if(rows.length>3){
         const headerRow=rows[3]||[];
         colCount=headerRow.filter(c=>c!=='').length;
       }
 
-      for(let i=5;i<rows.length;i++){
+      // ★ 연도별 데이터 집계
+      const yearData={};  // { '2025': {count, grades:{일반,우선,긴급}}, '2026': {...} }
+      let totalCount=0, emptyAddr=0;
+
+      for(let i=4;i<rows.length;i++){
         const r=rows[i];
-        if(!r[0]&&r[0]!==0) continue;
-        dataCount++;
-        const g=String(r[14]||'일반').trim();
-        if(grades[g]!==undefined) grades[g]++;
-        else grades['일반']++;
-        if(!String(r[16]||'').trim()) emptyAddr++;
+        const rv=r[psOffset];
+        if(rv===''||rv===null||rv===undefined) continue;
+        if(isNaN(Number(rv))||String(rv).trim()==='') continue;
+
+        const o=psOffset;
+        const rowYear=o===1?String(r[0]).trim():fileYear;
+
+        if(!yearData[rowYear]) yearData[rowYear]={count:0,grades:{일반:0,우선:0,긴급:0}};
+        yearData[rowYear].count++;
+        totalCount++;
+
+        const g=String(r[14+o]||'일반').trim();
+        if(yearData[rowYear].grades[g]!==undefined) yearData[rowYear].grades[g]++;
+        else yearData[rowYear].grades['일반']++;
+
+        if(!String(r[16+o]||'').trim()) emptyAddr++;
       }
 
       xlsxData[file.name]={
-        year:parsed.year,
         operator:parsed.operator,
         region:parsed.region,
-        rowCount:dataCount,
-        grades,
+        yearData,
+        totalCount,
         integ:{
-          hasRaw,
-          hasV2,
-          colCount,
-          emptyAddr,
-          dataCount,
-          addrRate:dataCount>0?Math.round((dataCount-emptyAddr)/dataCount*100):100,
+          hasRaw,hasV2,colCount,emptyAddr,
+          dataCount:totalCount,
+          addrRate:totalCount>0?Math.round((totalCount-emptyAddr)/totalCount*100):100,
           colOk:colCount>=20
         }
       };
@@ -589,15 +669,25 @@ async function analyzeExcelFiles(){
       console.warn('엑셀 분석 실패:',file.name,e);
     }
   }
+  // 사용 가능한 연도 목록 갱신
+  allAvailableYears=getAllYears();
+  selectedYears=new Set(allAvailableYears.slice(0,5)); // 기본: 전체 선택 (최대 5)
 }
 
 function parseFileName(name){
-  const base=name.replace(/\.xlsx?$/i,'').replace(/-보고서$/,'');
+  const base=name.replace(/\.xlsx?$/i,'')
+                 .replace(/^지하안전_갱신_/,'')
+                 .replace(/-보고서.*$/,'');
   const parts=base.split('-');
-  if(parts.length<3) return null;
-  const year=parts[0];
-  if(!/^\d{2}$/.test(year)) return null;
-  return{year:'20'+year,operator:parts[1],region:parts[2]};
+  // 구버전: 25-신분당-강남구 (연도-시행사-지역)
+  if(parts.length>=3 && /^\d{2}$/.test(parts[0])){
+    return{yearHint:'20'+parts[0],operator:parts[1],region:parts[2]};
+  }
+  // 새버전: 경기철도-용인시 (시행사-지역, 연도는 엑셀 데이터에서)
+  if(parts.length>=2 && /^[가-힣]/.test(parts[0])){
+    return{yearHint:'',operator:parts[0],region:parts[1]};
+  }
+  return null;
 }
 
 /* ═══════════════════════════════
@@ -654,13 +744,12 @@ function renderOverview(){
 
 /* ── 파일 현황 탭 ── */
 function renderFilesTab(){
-  let html='<div class="tbl-wrap"><table class="t"><thead><tr><th>파일명</th><th style="width:70px">GSMM</th><th style="width:60px">크기</th><th style="width:80px">수정자</th><th style="width:65px">무결성</th></tr></thead><tbody>';
+  let html='<div class="tbl-wrap"><table class="t"><thead><tr><th>파일명</th><th style="width:70px">GSMM</th><th style="width:80px">포함 연도</th><th style="width:60px">크기</th><th style="width:80px">수정자</th><th style="width:65px">무결성</th></tr></thead><tbody>';
 
   // 파일별 최근 커밋 정보 매핑
   const fileCommitMap={};
   ghCommits.forEach(c=>{
     const msg=c.commit.message;
-    // "데이터 업데이트 - 파일명.xlsx" 패턴에서 파일명 추출
     const m=msg.match(/[-–]\s*(.+\.xlsx)/i);
     if(m&&!fileCommitMap[m[1]]){
       fileCommitMap[m[1]]={author:c.commit.author.name,date:c.commit.author.date};
@@ -681,8 +770,14 @@ function renderFilesTab(){
       ?'<span class="fb loaded">● 현시 중</span>'
       :'<span class="fb unused">○ 미사용</span>';
 
-    let integBadge='<span class="badge b-ghost">-</span>';
+    // 포함 연도 표시
     const xd=xlsxData[f.name];
+    let yearInfo='';
+    if(xd&&Object.keys(xd.yearData).length>0){
+      yearInfo=Object.keys(xd.yearData).sort().map(y=>`<span class="badge b-info" style="margin:1px">${y}</span>`).join(' ');
+    }
+
+    let integBadge='<span class="badge b-ghost">-</span>';
     if(xd){
       if(!xd.integ.hasRaw) integBadge='<span class="badge b-err">시트 없음</span>';
       else if(xd.integ.addrRate<90) integBadge='<span class="badge b-warn">주소 '+xd.integ.addrRate+'%</span>';
@@ -692,7 +787,7 @@ function renderFilesTab(){
     const ci=fileCommitMap[f.name];
     const author=ci?ci.author:'—';
 
-    html+=`<tr><td style="font-size:12px">${esc(f.name)}</td><td>${gsmmBadge}</td><td>${sz}</td><td style="font-size:11px;color:var(--sub)">${esc(author)}</td><td>${integBadge}</td></tr>`;
+    html+=`<tr><td style="font-size:12px">${esc(f.name)}</td><td>${gsmmBadge}</td><td>${yearInfo}</td><td>${sz}</td><td style="font-size:11px;color:var(--sub)">${esc(author)}</td><td>${integBadge}</td></tr>`;
   });
 
   html+='</tbody></table></div>';
@@ -719,16 +814,30 @@ function renderCommitsTab(){
 
 /* ── 데이터 분석 탭 ── */
 function renderAnalysis(){
+  renderYearFilter();
   renderBarChart('analysisChart','analysisChartBadge');
   renderGradeDonut();
   renderIntegrity();
 }
 
+/* ── 연도 필터 렌더링 ── */
+function renderYearFilter(){
+  const area=document.getElementById('yearFilterArea');
+  if(!area) return;
+  if(allAvailableYears.length===0){
+    area.innerHTML='<span style="font-size:12px;color:var(--hint)">엑셀 분석 후 표시됩니다</span>';
+    return;
+  }
+  area.innerHTML=allAvailableYears.map(yr=>{
+    const on=selectedYears&&selectedYears.has(yr);
+    return`<div class="yf-btn ${on?'on':''}" onclick="toggleYear('${yr}')">${yr}년</div>`;
+  }).join('');
+}
+
 /* ── 막대 차트 (8개 권역) ── */
 function renderBarChart(containerId,badgeId){
-  // 연도별 데이터 수집
-  const yearSet=new Set();
-  Object.values(xlsxData).forEach(d=>yearSet.add(d.year));
+  const filtered=getFilteredYearData();
+  const yearSet=new Set(filtered.map(d=>d.year));
   const years=[...yearSet].sort();
 
   if(years.length===0){
@@ -739,7 +848,6 @@ function renderBarChart(containerId,badgeId){
 
   document.getElementById(badgeId).textContent=`${REGIONS.length}개 권역 · ${years.length}개년`;
 
-  // 색상 팔레트 (연도별 밝기 변화)
   function getBarColor(region,yearIdx,totalYears){
     const r=REGIONS.find(rg=>rg.operator===region.operator&&rg.region===region.region);
     if(!r) return'var(--sub)';
@@ -750,34 +858,28 @@ function renderBarChart(containerId,badgeId){
     return r.light;
   }
 
-  const maxVal=Math.max(1,...Object.values(xlsxData).map(d=>d.rowCount));
+  const maxVal=Math.max(1,...filtered.map(d=>d.count));
   const maxH=150;
 
   let html='<div class="chart-wrap"><div class="chart-area">';
   REGIONS.forEach(rg=>{
     html+='<div class="cg"><div class="cg-bars">';
     years.forEach((yr,yi)=>{
-      // 해당 권역+연도 파일 찾기
-      const key=Object.keys(xlsxData).find(k=>{
-        const d=xlsxData[k];
-        return d.operator===rg.operator&&d.region===rg.region&&d.year===yr;
-      });
-      const count=key?xlsxData[key].rowCount:0;
+      const match=filtered.find(d=>d.operator===rg.operator&&d.region===rg.region&&d.year===yr);
+      const count=match?match.count:0;
       const h=count>0?Math.max(8,Math.round(count/maxVal*maxH)):0;
       const color=getBarColor(rg,yi,years.length);
       if(count>0){
         html+=`<div class="cb" style="height:${h}px;background:${color};width:${Math.max(10,Math.floor(50/years.length))}px" title="${yr}: ${count}건"><span class="cb-val">${count}</span></div>`;
       }
     });
-    html+=`</div><div class="cg-lbl">${rg.operator.replace('철도','').replace('새서울','새서울')}<br>${rg.region}</div></div>`;
+    html+=`</div><div class="cg-lbl">${rg.operator.replace('철도','')}<br>${rg.region}</div></div>`;
   });
   html+='</div>';
 
-  // 범례
   html+='<div class="chart-legend">';
   years.forEach((yr,i)=>{
-    const sampleRg=REGIONS[0];
-    const color=getBarColor(sampleRg,i,years.length);
+    const color=getBarColor(REGIONS[0],i,years.length);
     html+=`<div class="chart-legend-i"><div class="chart-legend-d" style="background:${color}"></div>${yr}</div>`;
   });
   html+='</div>';
@@ -789,13 +891,17 @@ function renderBarChart(containerId,badgeId){
 
 /* ── 평가등급 도넛 ── */
 function renderGradeDonut(){
+  const filtered=getFilteredYearData();
   let total=0, g={일반:0,우선:0,긴급:0};
-  Object.values(xlsxData).forEach(d=>{
-    total+=d.rowCount;
+  filtered.forEach(d=>{
+    total+=d.count;
     g['일반']+=d.grades['일반']||0;
     g['우선']+=d.grades['우선']||0;
     g['긴급']+=d.grades['긴급']||0;
   });
+
+  const selLabel=selectedYears?[...selectedYears].sort().join(', ')+'년':'전체';
+  document.getElementById('gradeBadge').textContent=selLabel;
 
   if(total===0){
     document.getElementById('gradeChart').innerHTML='<div class="empty">데이터 없음</div>';
