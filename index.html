@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>지하안전 관리시스템 v20.2</title>
+<title>지하안전 관리시스템 v20.3</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
@@ -322,7 +322,7 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
 
 <!-- 헤더 -->
 <header id="hdr">
-  <h1>🗺 지하안전 관리 <span style="font-weight:300;opacity:.5">v20.2</span></h1>
+  <h1>🗺 지하안전 관리 <span style="font-weight:300;opacity:.5">v20.3</span></h1>
   <div class="hbg">
     <!-- 라이트/다크 토글 -->
     <button class="btn bs hbtn" id="themeBtn" onclick="toggleTheme()" title="라이트/다크 전환">🌙</button>
@@ -1913,7 +1913,7 @@ function updateYearBadge(){
   const badge=document.getElementById('yearBadge');
   if(!badge) return;
   if(yearFilter===null){badge.textContent='전체';badge.style.background='var(--acc)';badge.style.color='#000';}
-  else if(yearFilter.size===0){badge.textContent='없음';badge.style.background='var(--red)';badge.style.color='#fff';}
+  else if(yearFilter instanceof Set && yearFilter.size===0){badge.textContent='없음';badge.style.background='var(--red)';badge.style.color='#fff';}
   else{badge.textContent=[...yearFilter].sort().join(', ')+'년';badge.style.background='var(--yel)';badge.style.color='#000';}
 }
 function renderYearFilter(){
@@ -1922,7 +1922,7 @@ function renderYearFilter(){
   //   yearFilter 빈Set=전체표시이면 모든 연도 checked
   //   아니면 yearFilter에 있는 것만 checked
   allYears.forEach(y=>{
-    if(yearFilter.size===0) return; // 전체표시 상태면 그대로
+    if(yearFilter===null) return; // null=전체표시 상태면 그대로
     // yearFilter에 없는 새 연도 → 추가 안 함 (사용자 선택 존중)
   });
 
@@ -1942,7 +1942,7 @@ function renderYearFilter(){
 }
 /* ── 클릭추가 마커에 연도 필터 반영 ── */
 function placeMarkerWithFilter(fid,key,row){
-  if(yearFilter.size>0&&!yearFilter.has(String(row.year))) return;
+  if(yearFilter!==null&&yearFilter instanceof Set&&yearFilter.size>0&&!yearFilter.has(String(row.year))) return;
   placeMarker(fid,key,row);
 }
 </script>
