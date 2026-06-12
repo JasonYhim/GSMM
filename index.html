@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>지하안전 관리시스템 v20.3</title>
+<title>지하안전 관리시스템 v20.5</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
@@ -322,7 +322,7 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
 
 <!-- 헤더 -->
 <header id="hdr">
-  <h1>🗺 지하안전 관리 <span style="font-weight:300;opacity:.5">v20.3d</span></h1>
+  <h1>🗺 지하안전 관리 <span style="font-weight:300;opacity:.5">v20.5</span></h1>
   <div class="hbg">
     <!-- 라이트/다크 토글 -->
     <button class="btn bs hbtn" id="themeBtn" onclick="toggleTheme()" title="라이트/다크 전환">🌙</button>
@@ -803,26 +803,29 @@ function processSheet(sheet,name){
   const rows=[];
   // ★ 연도 열 자동 감지: 데이터 첫행 A열이 20xx이면 offset=1(연도열 있음)
   let psOffset=0, metaYear='';
-  for(let i=4;i<all.length;i++){
+  for(let i=3;i<all.length;i++){
     const r0=all[i];
     const v0=String(r0[0]??'').trim();
-    if(!v0) continue;
-    if(/^20\d{2}$/.test(v0)){psOffset=1;metaYear=v0;}  // 새 구조: A열=연도
-    else {
-      // 구버전: 파일명에서 연도 추출 시도 (예: "25-경기철도-성남시.xlsx" → "2025")
+    if(!v0) continue;                          // 빈 셀 → 다음 행
+    if(isNaN(Number(v0))) continue;            // ★ 텍스트(헤더행 '연도' 등) → 다음 행
+    if(/^20\d{2}$/.test(v0)){
+      psOffset=1; metaYear=v0;                 // 새 구조: A열=연도(20xx)
+    } else {
+      psOffset=0;                              // 구버전: A열=순번(숫자)
+      // 파일명에서 연도 추출 (예: '25-경기철도-성남시.xlsx' → '2025')
       const ynm=name.replace(/^지하안전_갱신_/,'').match(/^(\d{2})-/);
       if(ynm) metaYear='20'+ynm[1];
-      // 파일명에 없으면 A2셀(all[1][0]) 확인
-      else {
-        const a2=String(all[1]?.[0]??'').trim();
-        if(/^20\d{2}$/.test(a2)) metaYear=a2;
-        else if(/^\d{2}$/.test(a2)) metaYear='20'+a2;
-      }
     }
     break;
   }
-  // ★ 연도 미확인 시 '미확인'으로 표시 (현재연도로 대체 금지 → 오필터 방지)
+  // 파일명에 연도 없고 A열도 순번인 경우 → A2셀 확인 (기존 구버전 호환)
+  if(!metaYear){
+    const a2=String(all[1]?.[0]??'').trim();
+    if(/^20\d{2}$/.test(a2)) metaYear=a2;
+    else if(/^\d{2}$/.test(a2)) metaYear='20'+a2;
+  }
   const fileYear=metaYear||'미확인';
+  console.log('[PS] 파일:', name, '→ psOffset:', psOffset, '→ fileYear:', fileYear);
   for(let i=4;i<all.length;i++){
     const r=all[i];
     const rv=r[psOffset];                          // 순번 위치
@@ -1068,7 +1071,8 @@ function renderTable(tbodyId,rowPrefix,isMobile){
       // 연도 필터 적용
       // ★ yearFilter===null=전체표시, Set=선택된 연도만, 빈Set=0개
       if(yearFilter!==null){
-        if(!yearFilter.has(String(row.year))) return;
+        // '미확인' 연도 행은 특정 연도 필터 적용 시 항상 제외
+        if(row.year==='미확인' || !yearFilter.has(String(row.year))) return;
       }
       const mk=fid+':'+row._key;
       const tr=document.createElement('tr');tr.id=rowPrefix+mk;
@@ -1819,7 +1823,9 @@ function toggleTheme(){
 /* ── 연도 필터 함수 ── */
 function getAvailableYears(){
   const ys=new Set();
-  Object.values(files).forEach(f=>f.rows.forEach(r=>{if(r.year)ys.add(String(r.year));}));
+  Object.values(files).forEach(f=>f.rows.forEach(r=>{
+    if(r.year && r.year!=='미확인') ys.add(String(r.year));
+  }));
   return[...ys].sort();
 }
 /* ══ 마커 조회: 선택 연도만 지오코딩 → 마커 표시 ══ */
@@ -1843,7 +1849,10 @@ function applyMarkers(){
     if(!f.visible) return;
     f.rows.forEach((row,idx)=>{
       // ★ null=전체표시, Set=선택연도만, 빈Set=0개
-      const yearOk = yearFilter===null || (yearFilter instanceof Set && yearFilter.has(String(row.year)));
+      // '미확인' 행은 특정 연도 필터 시 제외
+      const yearOk = yearFilter===null
+        ? true
+        : (yearFilter instanceof Set && row.year!=='미확인' && yearFilter.has(String(row.year)));
       if(!yearOk) return;
       // 이미 좌표가 있으면 geoQ 없이 바로 마커 생성
       if(row.geoOk&&row.lat!==null){
