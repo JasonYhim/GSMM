@@ -322,7 +322,7 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
 
 <!-- 헤더 -->
 <header id="hdr">
-  <h1>🗺 지하안전 관리 <span style="font-weight:300;opacity:.5">v20.7</span></h1>
+  <h1>🗺 지하안전 관리 <span style="font-weight:300;opacity:.5">v20.7a</span></h1>
   <div class="hbg">
     <!-- 라이트/다크 토글 -->
     <button class="btn bs hbtn" id="themeBtn" onclick="toggleTheme()" title="라이트/다크 전환">🌙</button>
@@ -1144,6 +1144,9 @@ function renderTable(tbodyId,rowPrefix,isMobile){
           }
           setDirty(true);
           if(field==='addr') moveMarker(fid,row._key,row);
+          // ★ year 필드 변경 시 체크박스 즉시 갱신
+          //   (새 연도 입력 시 체크박스에 바로 반영)
+          if(field==='year') renderYearFilter();
         };
         td.appendChild(inp);tr.appendChild(td);
       });
