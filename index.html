@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>지하안전 관리시스템 v20.6</title>
+<title>지하안전 관리시스템 v20.7</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
@@ -322,7 +322,7 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
 
 <!-- 헤더 -->
 <header id="hdr">
-  <h1>🗺 지하안전 관리 <span style="font-weight:300;opacity:.5">v20.6</span></h1>
+  <h1>🗺 지하안전 관리 <span style="font-weight:300;opacity:.5">v20.7</span></h1>
   <div class="hbg">
     <!-- 라이트/다크 토글 -->
     <button class="btn bs hbtn" id="themeBtn" onclick="toggleTheme()" title="라이트/다크 전환">🌙</button>
@@ -825,7 +825,7 @@ function processSheet(sheet,name){
     else if(/^\d{2}$/.test(a2)) metaYear='20'+a2;
   }
   const fileYear=metaYear||'미확인';
-  console.log('[PS] 파일:', name, '→ psOffset:', psOffset, '→ fileYear:', fileYear);
+
   for(let i=4;i<all.length;i++){
     const r=all[i];
     const rv=r[psOffset];                          // 순번 위치
@@ -1071,19 +1071,8 @@ function renderMobileFileList(){
 function renderTable(tbodyId,rowPrefix,isMobile){
   const tbody=document.getElementById(tbodyId);if(!tbody) return;
   tbody.innerHTML='';
-  console.log('[RT] renderTable 실행 tbodyId='+tbodyId+' yearFilter=', yearFilter===null?'null':(yearFilter instanceof Set?[...yearFilter]:'?'));
-  // row.year 실제값 샘플 출력 (최초 5개)
-  if(yearFilter!==null){
-    let sampleCount=0;
-    Object.values(files).forEach(f=>{
-      f.rows.forEach(r=>{
-        if(sampleCount<5){
-          console.log('[RT] row.year='+JSON.stringify(r.year)+' type='+typeof r.year+' has='+yearFilter.has(String(r.year)));
-          sampleCount++;
-        }
-      });
-    });
-  }
+
+
   const FIELDS=['year','seq','road','code','settle','crack','wet','age','history','sI','sJ','sK','sL','sM','sN','grade','opinion','addr','infoS','infoT'];
   Object.entries(files).forEach(([fid,f])=>{
     if(!f.visible) return;
@@ -1899,6 +1888,16 @@ function applyMarkers(){
   }
 }
 
+// 미러 체크박스(모바일) → 소스(yearFilterWrap) 동기화
+function syncYearFilter(mirrorChk){
+  const srcWrap=document.getElementById('yearFilterWrap');
+  if(!srcWrap) return;
+  const srcChk=srcWrap.querySelector('.yf-chk[value="'+mirrorChk.value+'"]');
+  if(srcChk){
+    srcChk.checked=mirrorChk.checked;
+    applyYearFilter(); // 소스 기준으로 필터 적용
+  }
+}
 function resetYearFilter(){
   yearFilter=null; // null=전체표시
   // 모든 체크박스 checked
@@ -1915,11 +1914,16 @@ function resetYearFilter(){
   updateYearBadge();
 }
 function applyYearFilter(){
-  const checks=document.querySelectorAll('.yf-chk');
   const allYears=getAvailableYears();
-  const selected=[];
-  checks.forEach(ck=>{if(ck.checked)selected.push(ck.value);});
-  console.log('[YF] applyYearFilter 호출 → selected:', selected, '/ allYears:', allYears);
+  // ★ yearFilterWrap(지도 패널) 체크박스만 소스로 사용 — 중복 방지
+  const srcWrap=document.getElementById('yearFilterWrap');
+  const checks=srcWrap
+    ? srcWrap.querySelectorAll('.yf-chk')
+    : document.querySelectorAll('.yf-chk');
+  const selectedSet=new Set();
+  checks.forEach(ck=>{if(ck.checked)selectedSet.add(ck.value);});
+  const selected=[...selectedSet];
+
 
   // ★ yearFilter 설정:
   //   전체선택 → null (전체표시 특수값)
@@ -1930,7 +1934,7 @@ function applyYearFilter(){
   } else {
     yearFilter=new Set(selected);
   }
-  console.log('[YF] yearFilter 설정됨:', yearFilter===null?'null(전체)':[...yearFilter]);
+
   renderTablesOnly(); // 테이블 즉시 필터링
   updateYearBadge();
   // [마커 조회] 버튼 pulse 안내
@@ -1963,11 +1967,22 @@ function renderYearFilter(){
       el.innerHTML='<span style="color:#6b7280;font-size:10px">파일 불러오면 연도 표시</span>';
       return;
     }
-    const isAll = yearFilter===null; // null=전체표시 상태
-    el.innerHTML=allYears.map(y=>{
-      const chk = isAll || yearFilter.has(y);
-      return `<label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;background:var(--s2);border:1px solid var(--bor);border-radius:5px;padding:4px 8px;user-select:none;"><input type="checkbox" class="yf-chk" value="${y}" ${chk?'checked':''} onchange="applyYearFilter()">${y}년</label>`;
-    }).join('')+'<button onclick="resetYearFilter()" style="font-size:10px;padding:3px 7px;background:var(--s2);border:1px solid var(--bor);border-radius:4px;color:#9ca3af;cursor:pointer;margin-top:2px;">전체</button>';
+    const isAll = yearFilter===null;
+    const isMain = (id==='yearFilterWrap'); // 지도 패널이 소스
+    if(isMain){
+      // ★ 소스 wrap: 체크박스 생성 (onchange 이벤트 있음)
+      el.innerHTML=allYears.map(y=>{
+        const chk = isAll || yearFilter.has(y);
+        return `<label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;background:var(--s2);border:1px solid var(--bor);border-radius:5px;padding:4px 8px;user-select:none;"><input type="checkbox" class="yf-chk" value="${y}" ${chk?'checked':''} onchange="applyYearFilter()">${y}년</label>`;
+      }).join('')+'<button onclick="resetYearFilter()" style="font-size:10px;padding:3px 7px;background:var(--s2);border:1px solid var(--bor);border-radius:4px;color:#9ca3af;cursor:pointer;margin-top:2px;">전체</button>';
+    } else {
+      // ★ 미러 wrap(모바일): 소스 wrap과 동기화된 체크박스
+      //    onchange 시 yearFilterWrap의 해당 체크박스를 클릭하여 위임
+      el.innerHTML=allYears.map(y=>{
+        const chk = isAll || yearFilter.has(y);
+        return `<label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;background:var(--s2);border:1px solid var(--bor);border-radius:5px;padding:4px 8px;user-select:none;"><input type="checkbox" class="yf-chk-mirror" value="${y}" ${chk?'checked':''} onchange="syncYearFilter(this)">${y}년</label>`;
+      }).join('')+'<button onclick="resetYearFilter()" style="font-size:10px;padding:3px 7px;background:var(--s2);border:1px solid var(--bor);border-radius:4px;color:#9ca3af;cursor:pointer;margin-top:2px;">전체</button>';
+    }
   });
   updateYearBadge();
 }
