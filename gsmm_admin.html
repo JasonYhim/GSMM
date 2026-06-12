@@ -113,9 +113,12 @@ table.t tr:last-child td{border-bottom:none}
 .cb-val{position:absolute;top:-16px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:600;
         color:var(--sub);white-space:nowrap}
 .cg-lbl{font-size:9px;color:var(--hint);margin-top:6px;line-height:1.4;font-weight:500}
-.chart-legend{display:flex;gap:16px;margin-top:12px;justify-content:center;flex-wrap:wrap}
-.chart-legend-i{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--sub)}
-.chart-legend-d{width:10px;height:10px;border-radius:3px}
+.chart-legend{margin-top:14px;display:flex;flex-direction:column;gap:6px;padding:0 8px}
+.chart-legend-row{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--sub)}
+.chart-legend-label{min-width:60px;font-weight:600;font-size:11px;flex-shrink:0}
+.chart-legend-chips{display:flex;gap:6px;flex-wrap:wrap}
+.chart-legend-chip{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--hint)}
+.chart-legend-d{width:12px;height:12px;border-radius:3px;flex-shrink:0}
 .chart-note{font-size:10px;color:var(--hint);text-align:center;margin-top:6px}
 
 /* ── donut ── */
@@ -877,13 +880,25 @@ function renderBarChart(containerId,badgeId){
   });
   html+='</div>';
 
+  // ── 노선별 그룹 범례 (방안 B) ──
+  const operators=[
+    {name:'신분당',color:'#7F77DD',light:'#AFA9EC',lighter:'#CECBF6'},
+    {name:'경기철도',color:'#1D9E75',light:'#5DCAA5',lighter:'#9FE1CB'},
+    {name:'새서울철도',color:'#D85A30',light:'#F0997B',lighter:'#F5C4B3'}
+  ];
   html+='<div class="chart-legend">';
-  years.forEach((yr,i)=>{
-    const color=getBarColor(REGIONS[0],i,years.length);
-    html+=`<div class="chart-legend-i"><div class="chart-legend-d" style="background:${color}"></div>${yr}</div>`;
+  operators.forEach(op=>{
+    // 해당 노선의 대표 REGION을 사용하여 연도별 색상 산출
+    const repRg=REGIONS.find(r=>r.operator===op.name);
+    if(!repRg) return;
+    html+=`<div class="chart-legend-row"><div class="chart-legend-label">${op.name}</div><div class="chart-legend-chips">`;
+    years.forEach((yr,yi)=>{
+      const color=getBarColor(repRg,yi,years.length);
+      html+=`<div class="chart-legend-chip"><div class="chart-legend-d" style="background:${color}"></div>${yr}</div>`;
+    });
+    html+='</div></div>';
   });
   html+='</div>';
-  html+='<div class="chart-note">* 색상 계열: 보라=신분당 / 청록=경기철도 / 코랄=새서울철도</div>';
   html+='</div>';
 
   document.getElementById(containerId).innerHTML=html;
