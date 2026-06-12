@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>지하안전 관리시스템 v20.5</title>
+<title>지하안전 관리시스템 v20.6</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
@@ -322,7 +322,7 @@ tr.row-new td{background:rgba(34,197,94,.06)!important;}  /* 신규행 연초록
 
 <!-- 헤더 -->
 <header id="hdr">
-  <h1>🗺 지하안전 관리 <span style="font-weight:300;opacity:.5">v20.5</span></h1>
+  <h1>🗺 지하안전 관리 <span style="font-weight:300;opacity:.5">v20.6</span></h1>
   <div class="hbg">
     <!-- 라이트/다크 토글 -->
     <button class="btn bs hbtn" id="themeBtn" onclick="toggleTheme()" title="라이트/다크 전환">🌙</button>
@@ -839,7 +839,7 @@ function processSheet(sheet,name){
     const sN=sNraw!==''?sNraw:[sI,sJ,sK,sL,sM].reduce((a,v)=>{const n=parseFloat(v);return a+(isNaN(n)?0:n);},0)||'';
     const grade=String(r[14+o]||'')||calcGrade(sN);
     rows.push({
-      year:rowYear,
+      year:String(rowYear),
       seq:toNum(r[0+o]),road:String(r[1+o]||''),code:String(r[2+o]||''),
       settle:String(r[3+o]||''),crack:String(r[4+o]||''),wet:String(r[5+o]||''),
       age:toNum(r[6+o]),history:String(r[7+o]||''),
@@ -848,13 +848,21 @@ function processSheet(sheet,name){
       infoS:String(r[18+o]||''),infoT:String(r[19+o]||''),
       lat:null,lng:null,geoOk:false,isNew:false,isModified:false,_key:'r'+i});
   }
-  const fid='F_'+Date.now();
+  // ★ 같은 파일명이 이미 로드된 경우 기존 fid 재사용 (중복 방지)
+  let fid=Object.keys(files).find(k=>files[k].name===name);
+  if(fid){
+    // 기존 마커 제거 후 데이터 교체
+    files[fid].rows.forEach(row=>{
+      const mk=fid+':'+row._key;
+      if(markerMap.has(mk)){markerMap.get(mk).setMap(null);markerMap.delete(mk);}
+    });
+  } else {
+    fid='F_'+Date.now();
+  }
   files[fid]={name,year:fileYear,corp,region,rows,visible:true};
   activeFileId=fid;
   setDirty(false);
-  renderAll();  // renderYearFilter 포함 → 체크박스 갱신
-  // ★ 파일 로드 시 지오코딩/마커 표시 하지 않음
-  //   사용자가 연도 체크 후 [마커 조회] 버튼으로 직접 실행
+  renderAll();
 }
 
 /* ── GitHub 파일 목록 ── */
@@ -1064,6 +1072,18 @@ function renderTable(tbodyId,rowPrefix,isMobile){
   const tbody=document.getElementById(tbodyId);if(!tbody) return;
   tbody.innerHTML='';
   console.log('[RT] renderTable 실행 tbodyId='+tbodyId+' yearFilter=', yearFilter===null?'null':(yearFilter instanceof Set?[...yearFilter]:'?'));
+  // row.year 실제값 샘플 출력 (최초 5개)
+  if(yearFilter!==null){
+    let sampleCount=0;
+    Object.values(files).forEach(f=>{
+      f.rows.forEach(r=>{
+        if(sampleCount<5){
+          console.log('[RT] row.year='+JSON.stringify(r.year)+' type='+typeof r.year+' has='+yearFilter.has(String(r.year)));
+          sampleCount++;
+        }
+      });
+    });
+  }
   const FIELDS=['year','seq','road','code','settle','crack','wet','age','history','sI','sJ','sK','sL','sM','sN','grade','opinion','addr','infoS','infoT'];
   Object.entries(files).forEach(([fid,f])=>{
     if(!f.visible) return;
